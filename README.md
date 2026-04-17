@@ -28,15 +28,15 @@ When you run it follow the options below to load the EVCC specific version to yo
 3. Plug in ethernet and USB-C power
 4. Wait for the device to boot
 5. SFTP into the device
-  1. Host: `evcc`
-  2. Username: `admin`
-  3. Password: `admin`
-  4. Port: `22`
+    1. Host: `evcc`
+    2. Username: `admin`
+    3. Password: `admin`
+    4. Port: `22`
 7. Transfer `configure.sh` to the `/home/admin` directory
 8. SSH into the device using the same info as step 5 (unless you were prompted to change the password, then use the updated password)
 10. Run the following commands
-  1. `chmod u+w configure.sh`
-  2. `sudo bash ./configure.sh`
+    1. `chmod u+w configure.sh`
+    2. `sudo bash ./configure.sh`
 
 ## Common issues
 
