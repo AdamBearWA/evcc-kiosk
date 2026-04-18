@@ -39,5 +39,8 @@ WantedBy=local-fs.target
 EOF
 sudo systemctl enable tmp.mount
 
+# Security tweak - turn off root auto-login on the console
+sudo mv /etc/systemd/system/getty@.service.d/override.conf /etc/systemd/system/getty@.service.d/override.conf.disabled
+
 # Reboot to apply all tweaks
 sudo reboot
