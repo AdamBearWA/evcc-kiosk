@@ -92,4 +92,6 @@ echo "  Setup complete. Please set the EVCC admin"
 echo "  password when prompted below."
 echo "============================================"
 echo ""
+sudo systemctl stop evcc.service
 sudo evcc --database /var/lib/evcc/evcc.db password set
+sudo systemctl start evcc.service
