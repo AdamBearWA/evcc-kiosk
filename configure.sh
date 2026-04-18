@@ -12,7 +12,7 @@ sudo sed -i 's/^# SWAP_ALGORITHM=lzo/# SWAP_ALGORITHM=lzo\nSWAP_ALGORITHM=lz4/' 
 sudo systemctl disable --now avahi-daemon bluetooth rpcbind
 
 # Performance tweak - reduce GPU memory from 64MB to 16MB to free RAM for EVCC and Cog
-echo "gpu_mem=16" | sudo tee -a /boot/firmware/config.txt
+sudo grep -qxF 'gpu_mem=16' /boot/firmware/config.txt || echo 'gpu_mem=16' | sudo tee -a /boot/firmware/config.txt > /dev/null
 
 # Performance tweak - reduce kernel swap aggressiveness
 echo 'vm.swappiness=100' | sudo tee /etc/sysctl.d/99-swappiness.conf
