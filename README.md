@@ -36,9 +36,8 @@ When you run it follow the options below to load the EVCC specific version to yo
 7. SFTP into the device using the details from step 5 with your new password
 8. Transfer `configure.sh` and `tweaks.sh` to the `/home/admin` directory
 9. Return to your SSH terminal and run the following commands
-    1. `chmod u+w configure.sh`
-    2. `chmod u+w tweaks.sh`
-    3. `sudo bash ./tweaks.sh`
+    1. `chmod u+w configure.sh tweaks.sh`
+    2. `sudo bash ./tweaks.sh`
 10. Wait for the device to reboot
 11. SSH into the device again
 12. Run `sudo bash ./configure.sh`
@@ -51,4 +50,4 @@ The admin password for the device is independent to the admin password for EVCC
 
 ### Warning/Error message: `$'\r': command not found`
 
-Run this command: `sed -i 's/\r$//' ./configure.sh`
+Run this command: `sed -i 's/\r$//' ./*.sh`
