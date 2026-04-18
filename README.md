@@ -41,13 +41,3 @@ When you run it follow the options below to load the EVCC specific version to yo
 10. Wait for the device to reboot
 11. SSH into the device again
 12. Run `sudo bash ./configure.sh`
-
-## Common issues
-
-### Unable to login
-
-The admin password for the device is independent to the admin password for EVCC
-
-### Warning/Error message: `$'\r': command not found`
-
-Run this command: `sed -i 's/\r$//' ./*.sh`
