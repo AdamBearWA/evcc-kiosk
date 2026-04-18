@@ -28,16 +28,13 @@ When you run it follow the options below to load the EVCC specific version to yo
 3. Plug in ethernet and USB-C power
 4. Wait for the device to boot
 5. SSH into the device
-    1. Host: `evcc`
-    2. Username: `admin`
-    3. Password: `admin`
-    4. Port: `22`
-6. Change the admin password for the device when prompted
-7. SFTP into the device using the details from step 5 with your new password
-8. Transfer `configure.sh` and `tweaks.sh` to the `/home/admin` directory
-9. Return to your SSH terminal and run the following commands
-    1. `chmod u+w configure.sh tweaks.sh`
-    2. `sudo bash ./tweaks.sh`
-10. Wait for the device to reboot
-11. SSH into the device again
-12. Run `sudo bash ./configure.sh`
+   1. Run this command on your local machine (bash & PowerShell): `ssh admin@evcc`
+   2. When prompted for the password enter `admin`
+   3. When prompted, change the password
+6. Reconnect to the device via SSH with the new password
+7. Apply the tweaks script to the device by running this command:
+   - `sudo apt install -y curl && curl -sSL https://raw.githubusercontent.com/AdamBearWA/evcc-kiosk/main/tweaks.sh | sudo bash`
+8. Wait for the device to reboot
+9. Reconnect to the device via SSH with the new password
+10. Configure the device by running this command":
+    - `curl -sSL https://raw.githubusercontent.com/AdamBearWA/evcc-kiosk/main/configure.sh | sudo bash`
