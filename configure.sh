@@ -48,8 +48,8 @@ git clone --branch master https://github.com/Igalia/cog.git ~/cog
 # Install build dependencies
 sudo apt install -y cmake ninja-build pkg-config meson libwpewebkit-1.1-dev libwpe-1.0-dev libglib2.0-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libegl-dev libgbm-dev libinput-dev libxkbcommon-dev libwpebackend-fdo-1.0-dev libudev-dev=254.26-1~bpo12+1
 
-# Install GLES runtime library required by Cog DRM renderer
-sudo apt install -y libgles2
+# Install runtime dependencies
+sudo apt install -y libgles2 libwpewebkit-1.1-0 libinput10
 
 # Configure the Cog build for DRM platform only
 cd ~/cog && meson setup build --buildtype=release -Dplatforms=drm
