@@ -27,17 +27,24 @@ When you run it follow the options below to load the EVCC specific version to yo
 2. Install the Pi on the back of the display
 3. Plug in ethernet and USB-C power
 4. Wait for the device to boot
-5. SFTP into the device
+5. SHH into the device
     1. Host: `evcc`
     2. Username: `admin`
     3. Password: `admin`
     4. Port: `22`
-7. Transfer `configure.sh` to the `/home/admin` directory
-8. SSH into the device using the same info as step 5 (unless you were prompted to change the password, then use the updated password)
-10. Run the following commands
+6. Change the admin password for the device when prompted
+7. SFTP into the device using the details from step 5 with the new password
+8. Transfer `configure.sh` to the `/home/admin` directory
+9. Return to your SSH terminal and run the following commands
     1. `chmod u+w configure.sh`
     2. `sudo bash ./configure.sh`
 
 ## Common issues
 
+### Unable to login
+
 The admin password for the device is independent to the admin password for EVCC
+
+### Warning/Error message: `$'\r': command not found`
+
+Run this command: `sed -i 's/\r$//' ./configure.sh`
