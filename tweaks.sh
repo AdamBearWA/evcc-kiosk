@@ -1,17 +1,18 @@
 #!/bin/bash
+set -euo pipefail
 
-# Performance tweak - double zram swap size and use faster compression method
+# Performance tweak - configure zram: double swap size, use faster compression
 sudo sed -i 's/^# ZRAM_PERCENTAGE=50/# ZRAM_PERCENTAGE=50\nZRAM_PERCENTAGE=100/' /etc/default/armbian-zram-config
-sudo sed -i 's/^# MEM_LIMIT_PERCENTAGE=50/# MEM_LIMIT_PERCENTAGE=50\nMEM_LIMIT_PERCENTAGE=100/' /etc/default/armbian-zram-config
 sudo sed -i 's/^# SWAP_ALGORITHM=lzo/# SWAP_ALGORITHM=lzo\nSWAP_ALGORITHM=lz4/' /etc/default/armbian-zram-config
 
 # Performance tweak - disable unnecessary services
-sudo systemctl disable --now avahi-daemon bluetooth rpcbind
+sudo systemctl disable --now avahi-daemon bluetooth rpcbind || true
 
-# Performance tweak - reduce GPU memory from 64MB to 16MB to free RAM for EVCC and Cog
-sudo grep -qxF 'gpu_mem=16' /boot/firmware/config.txt || echo 'gpu_mem=16' | sudo tee -a /boot/firmware/config.txt > /dev/null
+# Performance tweak - set GPU memory to 32MB (sufficient for web kiosk, frees RAM for EVCC and Cog)
+sudo sed -i '/^gpu_mem=/d' /boot/firmware/config.txt
+echo 'gpu_mem=32' | sudo tee -a /boot/firmware/config.txt > /dev/null
 
-# Performance tweak - reduce kernel swap aggressiveness
+# Performance tweak - maximise use of zram swap
 echo 'vm.swappiness=100' | sudo tee /etc/sysctl.d/99-swappiness.conf
 
 # Reliability tweak - use volatile journald storage to reduce SD card wear
@@ -40,7 +41,7 @@ EOF
 sudo systemctl enable tmp.mount
 
 # Security tweak - turn off root auto-login on the console
-sudo mv /etc/systemd/system/getty@.service.d/override.conf /etc/systemd/system/getty@.service.d/override.conf.disabled
+sudo mv /etc/systemd/system/getty@.service.d/override.conf /etc/systemd/system/getty@.service.d/override.conf.disabled 2>/dev/null || true
 
 # Reboot to apply all tweaks
 sudo reboot
