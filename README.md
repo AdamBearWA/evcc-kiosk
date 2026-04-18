@@ -8,7 +8,7 @@ Configuration for a Raspberry Pi Zero 2 W with a Waveshare ZERO-DISP-7a display 
 * [Rasbperry Pi Zero 2 W](https://www.raspberrypi.com/products/raspberry-pi-zero-2-w/)
 * [Waveshare 7" Display Zero-DISP-7A](https://www.waveshare.com/wiki/Zero-DISP-7A)
 * Micro SD Card
-* USB-C power supply\
+* USB-C power supply
   * 5V 3A+ so it powers both the display and Pi reliably
 * Ethernet cable (this guide doesn't not include WiFi configuration)
 
