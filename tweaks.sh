@@ -13,7 +13,7 @@ sudo sed -i '/^gpu_mem=/d' /boot/firmware/config.txt
 echo 'gpu_mem=32' | sudo tee -a /boot/firmware/config.txt > /dev/null
 
 # Performance tweak - maximise use of zram swap
-echo 'vm.swappiness=100' | sudo tee /etc/sysctl.d/99-swappiness.conf
+echo 'vm.swappiness=80' | sudo tee /etc/sysctl.d/99-swappiness.conf
 
 # Reliability tweak - use volatile journald storage to reduce SD card wear
 sudo mkdir -p /etc/systemd/journald.conf.d
