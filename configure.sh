@@ -145,6 +145,23 @@ EOF
 sudo systemctl daemon-reload
 sudo systemctl enable --now kiosk-update.timer
 
+# Set the device timezone. The kiosk clock shows the device's local time, so if the timezone is
+# unset or wrong (e.g. UTC) the clock reads incorrectly. Prompt for an IANA timezone and apply it;
+# the running kiosk clock picks up the change automatically on its next tick (no restart needed).
+# Read from /dev/tty so the prompt works when this script is piped via 'curl | sudo bash'.
+echo ""
+echo "Current device timezone: $(timedatectl show -p Timezone --value 2>/dev/null)"
+echo "Enter your timezone as an IANA name, e.g. Australia/Perth or Europe/Berlin."
+echo "(List every option with: timedatectl list-timezones)"
+read -rp "Timezone [leave blank to keep current]: " KIOSK_TZ < /dev/tty || true
+if [ -n "${KIOSK_TZ:-}" ]; then
+	if sudo timedatectl set-timezone "$KIOSK_TZ"; then
+		echo "Timezone set to $KIOSK_TZ."
+	else
+		echo "WARNING: '$KIOSK_TZ' is not a valid timezone; leaving it unchanged."
+	fi
+fi
+
 # Set EVCC admin password
 echo ""
 echo "============================================"
