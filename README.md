@@ -56,3 +56,13 @@ The kernel, Armbian board-support packages, and general OS packages are delibera
 sudo apt update && sudo apt full-upgrade
 sudo reboot
 ```
+
+## Performance
+
+The Pi Zero 2 W is a modest device (quad-core Cortex-A53 at 1 GHz, 512 MB RAM), so `tweaks.sh` and `configure.sh` deliberately tune it for kiosk responsiveness:
+
+* **CPU governor** is pinned to `performance` so all cores stay at full clock instead of idling at 600 MHz and ramping up only after load appears.
+* **Swappiness** is kept at 100, which is correct for the zram swap device: cheap, compressed anonymous pages go to zram while executable code pages stay resident in RAM (a lower value forces code to be re-read from the slow SD card).
+* **Browser memory limits** (`MemoryHigh`/`MemoryMax` on `kiosk.service`) are sized to sit above the browser's transient per-interaction memory spike, so the kernel's cgroup throttle does not stall the render thread on every touch.
+
+Note that the **local touchscreen UI is inherently CPU-bound**: the Pi renders EVCC's full web app on a weak core, so on-screen updates are slower than the same EVCC instance viewed from a remote browser (which renders on more powerful hardware). The tuning above removes the avoidable stalls, but the device's CPU is the ultimate limit on local touch responsiveness.
