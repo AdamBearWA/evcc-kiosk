@@ -37,9 +37,19 @@ sudo ninja -C ~/cog/build install
 sudo ldconfig
 
 # Create dedicated unprivileged user for the kiosk service, with a persistent home directory.
-# The home is where WPEWebKit stores its browser profile, so the one-off dark-mode preference
-# (see README) survives both the nightly restart and reboots.
+# The home is where WPEWebKit stores its browser profile and caches, kept on disk so they survive
+# the nightly restart and reboots.
 sudo useradd -r -m -d /var/lib/kiosk -s /usr/sbin/nologin -G video,render,input kiosk 2>/dev/null || true
+
+# Install the lightweight kiosk UI. This is a single static page (vanilla JS, inline CSS, no
+# framework, no animated SVG, no charts) that Cog loads from disk via file:// and which talks
+# directly to the EVCC API and websocket on :7070. EVCC sends Access-Control-Allow-Origin: * and
+# does not origin-check /ws, so a file:// page can read state and post mode changes without any
+# proxy. It is far cheaper to render than EVCC's stock SPA, which is the binding constraint on
+# local touch responsiveness on this weak core (see README Performance section).
+sudo curl -fsSL https://raw.githubusercontent.com/AdamBearWA/evcc-kiosk/main/kiosk/index.html -o /var/lib/kiosk/index.html
+sudo chown kiosk:kiosk /var/lib/kiosk/index.html
+sudo chmod 0644 /var/lib/kiosk/index.html
 
 # Create kiosk systemd service to start Cog on boot
 sudo tee /etc/systemd/system/kiosk.service << 'EOF'
@@ -49,26 +59,19 @@ After=network.target evcc.service
 
 [Service]
 User=kiosk
-# Persistent home so WPEWebKit stores its profile (incl. the dark-mode preference) on disk
+# Persistent home so WPEWebKit keeps its profile and caches on disk across the nightly restart
 Environment=HOME=/var/lib/kiosk
 WorkingDirectory=/var/lib/kiosk
 Environment=COG_PLATFORM_DRM_VIDEO_DEVICE=/dev/dri/card0
-# Tell WPEWebKit this is a small device so it sizes its internal caches conservatively (200 MiB).
-# Kept below MemoryHigh so WebKit's own cache target never collides with the cgroup throttle,
-# and low enough that the browser's working set doesn't get pushed into zram swap.
-Environment=WPE_RAM_SIZE=209715200
-ExecStart=/usr/local/bin/cog --platform=drm --platform-params=renderer=gles,rotation=3 http://localhost:7070
+ExecStart=/usr/local/bin/cog --platform=drm --platform-params=renderer=gles,rotation=3 file:///var/lib/kiosk/index.html
 Restart=always
 RestartSec=5
-# Bound browser memory. MemoryHigh is a *throttle*: when the cgroup exceeds it the kernel injects
-# direct-reclaim stalls into the process. The EVCC SPA briefly balloons past ~200 MiB on every
-# touch (JS + layout + paint), so a 200M limit was firing on each interaction and stalling the
-# render thread for seconds - measured as the cgroup memory.events "high" counter climbing on
-# every touch. 290M sits above that transient spike so the throttle stays silent, while MemoryMax
-# is a hard ceiling so a runaway browser is restarted instead of triggering a system-wide OOM that
-# could kill evcc.
+# Hard memory ceiling as an OOM safety net. WPEWebKit's working set grows slowly over a day
+# (the nightly restart clears it); without a ceiling a runaway/leak could trigger a system-wide
+# OOM that kills evcc, so cap the browser cgroup and let systemd restart it instead. The former
+# MemoryHigh throttle and WPE_RAM_SIZE cache cap were removed: they existed to contain EVCC's
+# stock SPA, and the lightweight kiosk page sits ~62 MiB, far under this ceiling.
 MemoryAccounting=yes
-MemoryHigh=290M
 MemoryMax=340M
 
 [Install]
