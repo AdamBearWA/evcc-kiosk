@@ -46,7 +46,16 @@ When you run it follow the options below to load the EVCC specific version to yo
 10. Configure the device by running this command":
     - `curl -sSL https://raw.githubusercontent.com/AdamBearWA/evcc-kiosk/main/configure.sh | sudo bash`
 
-`configure.sh` installs a custom kiosk UI (`kiosk/index.html`) to `/var/lib/kiosk/` and points the browser at it. The page is dark-themed out of the box, so no one-off theme setup is needed.
+`configure.sh` installs a custom kiosk UI (`kiosk/index.html`) to `/var/lib/kiosk/` and points the browser at it. The page is dark-themed out of the box, so no one-off theme setup is needed. During this step you are prompted to set your **timezone** and the **EVCC admin password**.
+
+### Timezone
+
+The kiosk clock shows the device's **local time**, so the device needs the correct timezone set. `configure.sh` prompts for it during setup. To set or change it afterwards, use an [IANA timezone name](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones):
+
+```
+sudo timedatectl set-timezone Australia/Perth   # list all options with: timedatectl list-timezones
+sudo systemctl restart kiosk.service            # WPEWebKit caches the zone at startup, so restart it
+```
 
 ## Maintenance
 
