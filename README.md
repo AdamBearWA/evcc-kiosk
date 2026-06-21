@@ -50,11 +50,10 @@ When you run it follow the options below to load the EVCC specific version to yo
 
 ### Timezone
 
-The kiosk clock shows the device's **local time**, so the device needs the correct timezone set. `configure.sh` prompts for it during setup. To set or change it afterwards, use an [IANA timezone name](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones):
+The kiosk clock shows the device's **local time**, so the device needs the correct timezone set. `configure.sh` prompts for it during setup. To set or change it afterwards, use an [IANA timezone name](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) — the kiosk clock picks up the change automatically:
 
 ```
 sudo timedatectl set-timezone Australia/Perth   # list all options with: timedatectl list-timezones
-sudo systemctl restart kiosk.service            # WPEWebKit caches the zone at startup, so restart it
 ```
 
 ## Maintenance
