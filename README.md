@@ -1,7 +1,12 @@
 # evcc-kiosk
 Configuration for a Raspberry Pi Zero 2 W with a Waveshare ZERO-DISP-7a display running EVCC server and a custom lightweight UI in kiosk mode
 
-<img src="docs/screenshot.png" alt="The custom EVCC kiosk UI in portrait, showing solar/grid/home power, a home-battery gauge, vehicle charge status, energy stats, and charge-mode buttons" width="320">
+<p>
+  <img src="docs/screenshot.png" alt="The custom EVCC kiosk UI in portrait, showing solar/grid/home power, a home-battery gauge, vehicle charge status, energy stats, and charge-mode buttons" width="300">
+  <img src="docs/screenshot-connecting.png" alt="The connecting notice shown on a cold boot until the EVCC server responds" width="300">
+</p>
+
+_Left: the dashboard. Right: the **Connecting to EVCC…** notice shown on a cold boot, or whenever the server is unavailable, until live data arrives (so it never displays misleading zeros)._
 
 ## Pre-requisites
 
@@ -75,6 +80,7 @@ The local display loads a purpose-built page, `kiosk/index.html`, installed to `
 * **Plain DOM, inline CSS, vanilla JS** — no framework, no animated SVG, no charts. Each update rewrites a few text nodes, so a touch is a trivial repaint rather than a full re-render.
 * **Talks directly to EVCC** on `http://localhost:7070` — it reads `/api/state`, streams live updates over the `/ws` websocket, and posts charge-mode changes to `/api/loadpoints/{id}/mode/{mode}`. EVCC sends `Access-Control-Allow-Origin: *` and does not origin-check `/ws`, so the `file://` page needs **no reverse proxy**.
 * **No external/CDN assets** — fully self-contained for an offline kiosk.
+* **Connection-aware** — shows a *Connecting to EVCC…* notice on startup or while the server is unavailable, then reveals the dashboard once live data arrives, so it never displays a screen of misleading zeros.
 
 The screenshot above is produced by [`tools/screenshot/`](tools/screenshot/), which renders the page in a headless browser with sample data; run `npm run shot` there to regenerate it after UI changes.
 

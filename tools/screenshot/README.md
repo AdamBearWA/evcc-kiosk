@@ -11,10 +11,12 @@ From this directory:
 ```
 npm install
 npx playwright install chromium    # one-time: downloads the headless browser
-npm run shot
+npm run shot                       # the live dashboard  -> ../../docs/screenshot.png
+npm run shot:connecting            # the connecting state -> ../../docs/screenshot-connecting.png
 ```
 
-That writes `../../docs/screenshot.png` at 600×1024 (the portrait panel size) at 2× scale.
+Both render at 600×1024 (the portrait panel size) at 2× scale. `shot:connecting` stubs the
+websocket so no frame ever arrives, capturing the "Connecting to EVCC…" overlay.
 
 To change what the screenshot shows, edit the `sample` object in `shot.mjs` — it's the flat,
 dotted-key shape the page consumes over its websocket (e.g. `loadpoints.0.vehicleSoc`).

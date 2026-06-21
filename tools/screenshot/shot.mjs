@@ -2,8 +2,10 @@
 // The page is loaded over file:// with its websocket and /api/sessions fetch stubbed, so it
 // renders fully populated and deterministically - no running device or live EVCC needed.
 //
-// Usage (from tools/screenshot/):  npm install && npx playwright install chromium && npm run shot
-// Optional args:                   node shot.mjs [path/to/index.html] [path/to/out.png]
+// Usage (from tools/screenshot/):  npm install && npx playwright install chromium
+//   Live dashboard (default):      npm run shot              -> docs/screenshot.png
+//   Connecting overlay:            npm run shot:connecting   -> docs/screenshot-connecting.png
+// Optional positional args:        node shot.mjs [--connecting] [path/to/index.html] [out.png]
 
 import { chromium } from 'playwright';
 import { fileURLToPath } from 'node:url';
@@ -11,8 +13,11 @@ import path from 'node:path';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '..', '..');
-const target = process.argv[2] || path.join(repoRoot, 'kiosk', 'index.html');
-const out = process.argv[3] || path.join(repoRoot, 'docs', 'screenshot.png');
+const argv = process.argv.slice(2);
+const connecting = argv.includes('--connecting'); // render the "Connecting to EVCC…" overlay instead
+const positional = argv.filter((a) => !a.startsWith('--'));
+const target = positional[0] || path.join(repoRoot, 'kiosk', 'index.html');
+const out = positional[1] || path.join(repoRoot, 'docs', connecting ? 'screenshot-connecting.png' : 'screenshot.png');
 
 // Representative "charging on solar" scene, in the flat dotted-key shape the page consumes over
 // its websocket. Edit these values to change what the screenshot shows.
@@ -42,7 +47,14 @@ const browser = await chromium.launch();
 const ctx = await browser.newContext({ viewport: { width: 600, height: 1024 }, deviceScaleFactor: 2 });
 const page = await ctx.newPage();
 
-await page.addInitScript((sample) => {
+await page.addInitScript(({ sample, connecting }) => {
+  if (connecting) {
+    // Never delivers a frame, so the page keeps its "Connecting to EVCC…" overlay up.
+    class DeadWS { constructor() { this.readyState = 0; } send() {} close() {} }
+    window.WebSocket = DeadWS;
+    window.fetch = () => new Promise(() => {});
+    return;
+  }
   // Fake websocket: connects, then pushes one snapshot frame.
   class FakeWS {
     constructor() {
@@ -63,7 +75,7 @@ await page.addInitScript((sample) => {
     }
     return Promise.resolve({ ok: true, json: () => Promise.resolve('pv') });
   };
-}, sample);
+}, { sample, connecting });
 
 await page.goto('file://' + target);
 await page.waitForTimeout(700);
