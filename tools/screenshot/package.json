@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Render kiosk/index.html to docs/screenshot.png for the README",
   "scripts": {
-    "shot": "node shot.mjs"
+    "shot": "node shot.mjs",
+    "shot:connecting": "node shot.mjs --connecting"
   },
   "devDependencies": {
     "playwright": "^1.61.0"
