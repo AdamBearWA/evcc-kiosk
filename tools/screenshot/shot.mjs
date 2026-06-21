@@ -16,18 +16,21 @@ const out = process.argv[3] || path.join(repoRoot, 'docs', 'screenshot.png');
 
 // Representative "charging on solar" scene, in the flat dotted-key shape the page consumes over
 // its websocket. Edit these values to change what the screenshot shows.
+// Powers obey EVCC's balance: pv + grid + battery = home + charge
+// (grid +import/-export, battery +discharge/-charge). Here a big solar day powers
+// the car and battery and still exports: 10000 - 1400 - 1000 = 600 + 7000 = 7600 W.
 const sample = {
   siteTitle: 'EVCC', currency: 'USD', tariffGrid: 0.30, tariffFeedIn: 0.08,
   statistics: { '30d': { solarPercentage: 80 } },
-  pvPower: 4100, homePower: 650,
-  grid: { power: -1200 },                            // negative = exporting
-  battery: { power: -900, soc: 75, capacity: 10.0 }, // negative = charging
+  pvPower: 10000, homePower: 600,
+  grid: { power: -1400 },                             // negative = exporting
+  battery: { power: -1000, soc: 75, capacity: 10.0 }, // negative = charging
   'loadpoints.0.title': 'Charger',
   'loadpoints.0.vehicleTitle': 'Sample Vehicle',
   'loadpoints.0.connected': true,
   'loadpoints.0.charging': true,
   'loadpoints.0.mode': 'pv',
-  'loadpoints.0.chargePower': 7400,
+  'loadpoints.0.chargePower': 7000,
   'loadpoints.0.vehicleSoc': 62,
   'loadpoints.0.effectiveLimitSoc': 80,
   'loadpoints.0.vehicleRange': 300,
