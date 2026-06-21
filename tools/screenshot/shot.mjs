@@ -17,20 +17,20 @@ const out = process.argv[3] || path.join(repoRoot, 'docs', 'screenshot.png');
 // Representative "charging on solar" scene, in the flat dotted-key shape the page consumes over
 // its websocket. Edit these values to change what the screenshot shows.
 const sample = {
-  siteTitle: 'EVCC', currency: 'AUD', tariffGrid: 0.324, tariffFeedIn: 0.02,
-  statistics: { '30d': { solarPercentage: 81 } },
-  pvPower: 4120, homePower: 640,
-  grid: { power: -1180 },                            // negative = exporting
-  battery: { power: -900, soc: 74, capacity: 19.2 }, // negative = charging
+  siteTitle: 'EVCC', currency: 'USD', tariffGrid: 0.30, tariffFeedIn: 0.08,
+  statistics: { '30d': { solarPercentage: 80 } },
+  pvPower: 4100, homePower: 650,
+  grid: { power: -1200 },                            // negative = exporting
+  battery: { power: -900, soc: 75, capacity: 10.0 }, // negative = charging
   'loadpoints.0.title': 'Charger',
-  'loadpoints.0.vehicleTitle': 'Kia EV6 GT',
+  'loadpoints.0.vehicleTitle': 'Sample Vehicle',
   'loadpoints.0.connected': true,
   'loadpoints.0.charging': true,
   'loadpoints.0.mode': 'pv',
   'loadpoints.0.chargePower': 7400,
   'loadpoints.0.vehicleSoc': 62,
   'loadpoints.0.effectiveLimitSoc': 80,
-  'loadpoints.0.vehicleRange': 305,
+  'loadpoints.0.vehicleRange': 300,
   'loadpoints.0.sessionEnergy': 4200,                // Wh
   'loadpoints.0.pvAction': 'enable'
 };
