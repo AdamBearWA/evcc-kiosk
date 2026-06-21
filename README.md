@@ -38,3 +38,6 @@ When you run it follow the options below to load the EVCC specific version to yo
 9. Reconnect to the device via SSH with the new password
 10. Configure the device by running this command":
     - `curl -sSL https://raw.githubusercontent.com/AdamBearWA/evcc-kiosk/main/configure.sh | sudo bash`
+11. Set the display to dark mode (one-off):
+    1. On the device's touchscreen, open the evcc menu and switch the theme to **Dark**
+    2. This only needs to be done once. The preference is saved to the kiosk user's browser profile under `/var/lib/kiosk`, so it persists across the nightly browser restart and across reboots.

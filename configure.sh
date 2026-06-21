@@ -36,8 +36,10 @@ sudo ninja -C ~/cog/build install
 # Update shared library cache
 sudo ldconfig
 
-# Create dedicated unprivileged user for kiosk service
-sudo useradd -r -s /bin/false -G video,render,input kiosk 2>/dev/null || true
+# Create dedicated unprivileged user for the kiosk service, with a persistent home directory.
+# The home is where WPEWebKit stores its browser profile, so the one-off dark-mode preference
+# (see README) survives both the nightly restart and reboots.
+sudo useradd -r -m -d /var/lib/kiosk -s /usr/sbin/nologin -G video,render,input kiosk 2>/dev/null || true
 
 # Create kiosk systemd service to start Cog on boot
 sudo tee /etc/systemd/system/kiosk.service << 'EOF'
@@ -47,19 +49,57 @@ After=network.target evcc.service
 
 [Service]
 User=kiosk
+# Persistent home so WPEWebKit stores its profile (incl. the dark-mode preference) on disk
+Environment=HOME=/var/lib/kiosk
+WorkingDirectory=/var/lib/kiosk
 Environment=COG_PLATFORM_DRM_VIDEO_DEVICE=/dev/dri/card0
-ExecStart=/usr/local/bin/cog --platform=drm --platform-params=renderer=gles,rotation=1 http://localhost:7070
+# Tell WPEWebKit this is a small device so it sizes its internal caches conservatively (256 MiB)
+Environment=WPE_RAM_SIZE=268435456
+ExecStart=/usr/local/bin/cog --platform=drm --platform-params=renderer=gles,rotation=3 http://localhost:7070
 Restart=always
 RestartSec=5
+# Bound browser memory: WebKit's memory-pressure handler reacts to MemoryHigh by shedding
+# caches; MemoryMax is a hard ceiling so a runaway browser is restarted instead of triggering
+# a system-wide OOM that could kill evcc.
+MemoryAccounting=yes
+MemoryHigh=200M
+MemoryMax=260M
 
 [Install]
 WantedBy=multi-user.target
+EOF
+
+# Create a nightly restart of the kiosk browser to clear gradual WPEWebKit memory growth.
+# Without this the leak fills RAM/zram after ~a day and the device becomes unresponsive.
+sudo tee /etc/systemd/system/kiosk-restart.service << 'EOF'
+[Unit]
+Description=Restart EVCC Kiosk Browser to clear memory growth
+After=kiosk.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl restart kiosk.service
+EOF
+
+sudo tee /etc/systemd/system/kiosk-restart.timer << 'EOF'
+[Unit]
+Description=Nightly restart of the EVCC Kiosk Browser
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
 EOF
 
 # Enable and start the kiosk service
 sudo systemctl daemon-reload
 sudo systemctl enable kiosk.service
 sudo systemctl start kiosk.service
+
+# Enable the nightly browser-restart timer
+sudo systemctl enable --now kiosk-restart.timer
 
 # Set EVCC admin password
 echo ""
