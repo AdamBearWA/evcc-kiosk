@@ -41,3 +41,18 @@ When you run it follow the options below to load the EVCC specific version to yo
 11. Set the display to dark mode (one-off):
     1. On the device's touchscreen, open the evcc menu and switch the theme to **Dark**
     2. This only needs to be done once. The preference is saved to the kiosk user's browser profile under `/var/lib/kiosk`, so it persists across the nightly browser restart and across reboots.
+
+## Maintenance
+
+The device maintains itself nightly at 04:00 via the `kiosk-update.timer` systemd timer, which runs a single ordered job:
+
+1. Refreshes the apt package lists.
+2. Applies unattended upgrades, scoped to **Debian security updates** and **evcc** only. `needrestart` restarts any services affected by a library update so the patches take effect without a reboot.
+3. Recycles the browser exactly once: it **reboots** if a kernel update requires it (which also clears the gradual WPEWebKit memory growth), otherwise it just **restarts the browser** (which clears that growth on its own).
+
+The kernel, Armbian board-support packages, and general OS packages are deliberately **excluded** from the automatic upgrades to keep the pinned, hand-built Cog browser stable. Apply those manually when needed:
+
+```
+sudo apt update && sudo apt full-upgrade
+sudo reboot
+```
