@@ -50,7 +50,7 @@ User=kiosk
 Environment=COG_PLATFORM_DRM_VIDEO_DEVICE=/dev/dri/card0
 # Tell WPEWebKit this is a small device so it sizes its internal caches conservatively (256 MiB)
 Environment=WPE_RAM_SIZE=268435456
-ExecStart=/usr/local/bin/cog --platform=drm --platform-params=renderer=gles,rotation=1 http://localhost:7070
+ExecStart=/usr/local/bin/cog --platform=drm --platform-params=renderer=gles,rotation=3 http://localhost:7070
 Restart=always
 RestartSec=5
 # Bound browser memory: WebKit's memory-pressure handler reacts to MemoryHigh by shedding
