@@ -60,25 +60,20 @@ sudo reboot
 
 ## Performance
 
-The Pi Zero 2 W is a modest device (quad-core Cortex-A53 at 1 GHz, 512 MB RAM). The single biggest factor in local kiosk responsiveness is **the UI itself** (see below) — and with a featherweight custom UI in place, the elaborate system tuning the stock EVCC SPA used to need is no longer required.
+The Pi Zero 2 W is a modest device (quad-core Cortex-A53 at 1 GHz, 512 MB RAM), and EVCC's stock single-page app — Vue with an animated SVG energy-flow diagram and charts — is **CPU-bound** on this weak core: rendered locally, each touch takes 2–3 s to repaint, while the same instance is instant from a remote browser running on faster hardware. The CPU is the ultimate limit on how fast that app can repaint here.
 
-What `tweaks.sh` and `configure.sh` still do for the kiosk:
+The local display therefore runs a **custom lightweight UI** instead (see below); it is the single biggest factor in the kiosk's responsiveness. Alongside it, `tweaks.sh` and `configure.sh` apply a few targeted measures:
 
-* **A custom lightweight UI** replaces EVCC's stock web app on the local display (see below) — the dominant reduction in per-touch render work.
-* **An OOM safety ceiling** (`MemoryMax` on `kiosk.service`) caps the browser cgroup so a slow WPEWebKit leak is restarted rather than triggering a system-wide OOM that could take down `evcc`.
-* **Unused services disabled** (`avahi`, `bluetooth`, `rpcbind`) to trim the footprint and attack surface — hygiene, not performance.
+* **OOM safety ceiling** — `MemoryMax` on `kiosk.service` caps the browser cgroup, so a slow WPEWebKit memory leak is restarted rather than triggering a system-wide OOM that could take down `evcc`.
+* **Unused services disabled** — `avahi`, `bluetooth` and `rpcbind` are turned off to trim the footprint and attack surface.
 * **SD-card wear reduction** — volatile journald storage and a tmpfs `/tmp`.
-
-Earlier versions also pinned the CPU governor to `performance`, doubled the zram swap with `lz4`, raised `vm.swappiness`, shrank `gpu_mem`, and added a `MemoryHigh` cgroup throttle plus a `WPE_RAM_SIZE` cache cap — all to keep the CPU- and RAM-hungry stock SPA usable. After switching to the custom UI these were **removed** to reduce complexity; touch stays responsive on the stock `ondemand` governor with the browser sitting at ~62 MiB.
 
 ### The custom kiosk UI
 
-EVCC's stock single-page app (Vue, an animated SVG energy-flow diagram, and charts) is **CPU-bound** on this weak core: each touch took 2–3 s to repaint locally, while the same instance is instant from a remote browser rendering on faster hardware. The CPU is the ultimate limit on how fast that SPA can repaint here.
+The local display loads a purpose-built page, `kiosk/index.html`, installed to `/var/lib/kiosk/index.html` and opened directly by Cog over `file://`:
 
-Rather than fight the SPA, the local display loads a purpose-built page, `kiosk/index.html`, installed to `/var/lib/kiosk/index.html` and opened directly by Cog over `file://`:
-
-* **Plain DOM, inline CSS, vanilla JS** — no framework, no animated SVG, no charts. Each update just rewrites a few text nodes, so a touch is a trivial repaint instead of a full re-render.
-* **Talks directly to EVCC** on `http://localhost:7070` — it reads `/api/state`, streams live updates over the `/ws` websocket, and posts charge-mode changes to `/api/loadpoints/{id}/mode/{mode}`. EVCC sends `Access-Control-Allow-Origin: *` and does not origin-check `/ws`, so the `file://` page needs **no reverse proxy** (one less process and its RAM).
+* **Plain DOM, inline CSS, vanilla JS** — no framework, no animated SVG, no charts. Each update rewrites a few text nodes, so a touch is a trivial repaint rather than a full re-render.
+* **Talks directly to EVCC** on `http://localhost:7070` — it reads `/api/state`, streams live updates over the `/ws` websocket, and posts charge-mode changes to `/api/loadpoints/{id}/mode/{mode}`. EVCC sends `Access-Control-Allow-Origin: *` and does not origin-check `/ws`, so the `file://` page needs **no reverse proxy**.
 * **No external/CDN assets** — fully self-contained for an offline kiosk.
 
-The effect on the binding constraint — RAM and the render work that drove the zram swapping — is large. The browser's resident set dropped from pressing against the old `MemoryHigh=290M` throttle (with heavy zram swap) to **~62 MiB resident**, and system swap use fell from ~350 MiB to ~100 MiB. That headroom is what let the per-touch CPU and RAM tuning be removed.
+The browser's resident set sits at around **62 MiB**, well within the `MemoryMax` ceiling, and zram swap use stays low — light enough that the CPU governor can stay on the stock `ondemand` setting while touch remains responsive.

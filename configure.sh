@@ -68,9 +68,8 @@ Restart=always
 RestartSec=5
 # Hard memory ceiling as an OOM safety net. WPEWebKit's working set grows slowly over a day
 # (the nightly restart clears it); without a ceiling a runaway/leak could trigger a system-wide
-# OOM that kills evcc, so cap the browser cgroup and let systemd restart it instead. The former
-# MemoryHigh throttle and WPE_RAM_SIZE cache cap were removed: they existed to contain EVCC's
-# stock SPA, and the lightweight kiosk page sits ~62 MiB, far under this ceiling.
+# OOM that kills evcc, so cap the browser cgroup and let systemd restart it instead. The
+# lightweight kiosk page sits at around 62 MiB, far under this ceiling.
 MemoryAccounting=yes
 MemoryMax=340M
 
