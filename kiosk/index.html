@@ -123,9 +123,36 @@
   .mode-btn.active { background: var(--accent); border-color: var(--accent); color: #062012; }
   .mode-btn.active .hint { color: #0a3d22; }
   .mode-btn.pending { opacity: 0.55; }
+
+  /* Shown until the first websocket frame arrives, so a cold boot (or EVCC not yet up) never
+     displays a screen full of misleading zeros. */
+  .overlay {
+    position: fixed; inset: 0; z-index: 20; background: var(--bg);
+    display: flex; align-items: center; justify-content: center; text-align: center; padding: 1rem;
+  }
+  .overlay[hidden] { display: none; }
+  .overlay .o-dot { display: inline-block; width: 0.8rem; height: 0.8rem; border-radius: 50%; background: var(--amber); margin-bottom: 0.7rem; }
+  .overlay .o-title { font-size: 1.5rem; font-weight: 800; }
+  .overlay .o-sub { font-size: 1rem; color: var(--muted); margin-top: 0.5rem; }
+  /* Thin banner shown if the connection drops after data has loaded (last values stay on screen). */
+  .banner {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 15;
+    background: var(--import); color: #2a0d0a; font-weight: 700; font-size: 0.95rem;
+    text-align: center; padding: 0.4rem;
+  }
+  .banner[hidden] { display: none; }
 </style>
 </head>
 <body>
+  <div id="boot" class="overlay">
+    <div>
+      <div class="o-dot"></div>
+      <div class="o-title">Connecting to EVCC…</div>
+      <div class="o-sub">Waiting for the server to respond</div>
+    </div>
+  </div>
+  <div id="reconnect" class="banner" hidden>EVCC connection lost — reconnecting…</div>
+
   <header>
     <span class="hdr-left"><span id="clock">--:--</span><span id="date"></span></span>
     <span class="hdr-right"><span id="site-title">EVCC</span><span id="conn" title="connection"></span></span>
@@ -341,16 +368,26 @@
 
   // -- websocket ingest ----------------------------------------------------
   var ws = null;
+  var hasData = false;   // have we received at least one frame from EVCC?
   function setConn(ok) { document.getElementById("conn").className = ok ? "ok" : ""; }
+  function showOverlay(on) { document.getElementById("boot").hidden = !on; }
+  function showBanner(on) { document.getElementById("reconnect").hidden = !on; }
   function applyMsg(obj) {
     for (var k in obj) if (obj.hasOwnProperty(k)) st[k] = obj[k];
+    if (!hasData) { hasData = true; showOverlay(false); } // first real data: reveal the UI
+    showBanner(false);
     renderAll();
   }
+  function onDisconnected() {
+    // Before any data has loaded (cold boot / EVCC not up yet) keep the full "connecting" overlay;
+    // after data, show only a thin banner so the last-known values stay visible.
+    if (hasData) showBanner(true); else showOverlay(true);
+  }
   function connect() {
-    try { ws = new WebSocket(WS); } catch (e) { scheduleReconnect(); return; }
+    try { ws = new WebSocket(WS); } catch (e) { setConn(false); onDisconnected(); scheduleReconnect(); return; }
     ws.onopen = function () { setConn(true); };
     ws.onmessage = function (ev) { try { applyMsg(JSON.parse(ev.data)); } catch (e) {} };
-    ws.onclose = function () { setConn(false); scheduleReconnect(); };
+    ws.onclose = function () { setConn(false); onDisconnected(); scheduleReconnect(); };
     ws.onerror = function () { try { ws.close(); } catch (e) {} };
   }
   var reconnectTimer = null;
