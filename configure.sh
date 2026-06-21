@@ -64,10 +64,37 @@ MemoryMax=260M
 WantedBy=multi-user.target
 EOF
 
+# Create a nightly restart of the kiosk browser to clear gradual WPEWebKit memory growth.
+# Without this the leak fills RAM/zram after ~a day and the device becomes unresponsive.
+sudo tee /etc/systemd/system/kiosk-restart.service << 'EOF'
+[Unit]
+Description=Restart EVCC Kiosk Browser to clear memory growth
+After=kiosk.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl restart kiosk.service
+EOF
+
+sudo tee /etc/systemd/system/kiosk-restart.timer << 'EOF'
+[Unit]
+Description=Nightly restart of the EVCC Kiosk Browser
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
 # Enable and start the kiosk service
 sudo systemctl daemon-reload
 sudo systemctl enable kiosk.service
 sudo systemctl start kiosk.service
+
+# Enable the nightly browser-restart timer
+sudo systemctl enable --now kiosk-restart.timer
 
 # Set EVCC admin password
 echo ""
