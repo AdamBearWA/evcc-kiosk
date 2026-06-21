@@ -12,8 +12,14 @@ sudo systemctl disable --now avahi-daemon bluetooth rpcbind || true
 sudo sed -i '/^gpu_mem=/d' /boot/firmware/config.txt
 echo 'gpu_mem=32' | sudo tee -a /boot/firmware/config.txt > /dev/null
 
-# Performance tweak - maximise use of zram swap
-echo 'vm.swappiness=80' | sudo tee /etc/sysctl.d/99-swappiness.conf
+# Performance tweak - lower swappiness so a leaky browser doesn't thrash zram.
+# The Armbian image appends vm.swappiness=100 to /etc/sysctl.conf, which is applied last
+# and overrides anything in /etc/sysctl.d, so the value must be set there directly.
+if grep -q '^vm\.swappiness=' /etc/sysctl.conf; then
+	sudo sed -i 's/^vm\.swappiness=.*/vm.swappiness=60/' /etc/sysctl.conf
+else
+	echo 'vm.swappiness=60' | sudo tee -a /etc/sysctl.conf > /dev/null
+fi
 
 # Reliability tweak - use volatile journald storage to reduce SD card wear
 sudo mkdir -p /etc/systemd/journald.conf.d
