@@ -69,37 +69,73 @@ MemoryMax=260M
 WantedBy=multi-user.target
 EOF
 
-# Create a nightly restart of the kiosk browser to clear gradual WPEWebKit memory growth.
-# Without this the leak fills RAM/zram after ~a day and the device becomes unresponsive.
-sudo tee /etc/systemd/system/kiosk-restart.service << 'EOF'
-[Unit]
-Description=Restart EVCC Kiosk Browser to clear memory growth
-After=kiosk.service
-
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/systemctl restart kiosk.service
-EOF
-
-sudo tee /etc/systemd/system/kiosk-restart.timer << 'EOF'
-[Unit]
-Description=Nightly restart of the EVCC Kiosk Browser
-
-[Timer]
-OnCalendar=*-*-* 04:00:00
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-EOF
-
 # Enable and start the kiosk service
 sudo systemctl daemon-reload
 sudo systemctl enable kiosk.service
 sudo systemctl start kiosk.service
 
-# Enable the nightly browser-restart timer
-sudo systemctl enable --now kiosk-restart.timer
+# Install unattended-upgrades for automatic security + evcc updates, plus needrestart to restart
+# services affected by library upgrades (so security patches take effect without a full reboot)
+# and to detect when a kernel reboot is genuinely required.
+sudo apt install -y unattended-upgrades needrestart
+
+# Let needrestart restart affected services automatically (this is a non-interactive kiosk).
+sudo mkdir -p /etc/needrestart/needrestart.conf.d
+sudo tee /etc/needrestart/needrestart.conf.d/99-kiosk.conf << 'EOF'
+$nrconf{restart} = 'a';
+EOF
+
+# Restrict unattended-upgrades to Debian security plus the evcc apt repo. The Armbian image's
+# default Origins-Pattern allows the entire Debian archive and all Armbian packages (including the
+# kernel), so clear it and redefine it narrowly - this keeps kernel/BSP and general package churn
+# out of the automatic upgrades, protecting the hand-built Cog. Rebooting is handled by the
+# update service below, not here.
+sudo tee /etc/apt/apt.conf.d/52kiosk-unattended << 'EOF'
+#clear Unattended-Upgrade::Origins-Pattern;
+Unattended-Upgrade::Origins-Pattern {
+    "origin=Debian,codename=bookworm,label=Debian-Security";
+    "origin=Debian,codename=bookworm-security,label=Debian-Security";
+    "origin=cloudsmith/evcc/stable,codename=bookworm";
+};
+EOF
+
+# Drive the update from a single timer at 04:00 instead of the default apt-daily timers, so it
+# lands in one predictable maintenance window.
+sudo systemctl disable --now apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true
+
+# One ordered nightly job: update package lists, apply security + evcc upgrades (needrestart
+# restarts any affected services so patches take effect), then recycle the browser exactly once -
+# reboot if needrestart reports a kernel reboot is required (which also clears the WPEWebKit
+# leak), otherwise just restart the kiosk browser. The leading '-' on the apt steps makes them
+# non-fatal, so the browser is recycled even if an update step fails.
+sudo tee /etc/systemd/system/kiosk-update.service << 'EOF'
+[Unit]
+Description=Nightly apt update, unattended security/evcc upgrades, and browser recycle
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=-/usr/bin/apt-get update -qq
+ExecStart=-/usr/bin/unattended-upgrade -v
+ExecStart=/usr/bin/bash -c 'if needrestart -bk 2>/dev/null | grep -q "^NEEDRESTART-KSTA: 3"; then systemctl reboot; else systemctl restart kiosk.service; fi'
+EOF
+
+sudo tee /etc/systemd/system/kiosk-update.timer << 'EOF'
+[Unit]
+Description=Nightly EVCC kiosk update check at 04:00
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+Persistent=true
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now kiosk-update.timer
 
 # Set EVCC admin password
 echo ""
