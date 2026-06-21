@@ -36,8 +36,10 @@ sudo ninja -C ~/cog/build install
 # Update shared library cache
 sudo ldconfig
 
-# Create dedicated unprivileged user for kiosk service
-sudo useradd -r -s /bin/false -G video,render,input kiosk 2>/dev/null || true
+# Create dedicated unprivileged user for the kiosk service, with a persistent home directory.
+# The home is where WPEWebKit stores its browser profile, so the one-off dark-mode preference
+# (see README) survives both the nightly restart and reboots.
+sudo useradd -r -m -d /var/lib/kiosk -s /usr/sbin/nologin -G video,render,input kiosk 2>/dev/null || true
 
 # Create kiosk systemd service to start Cog on boot
 sudo tee /etc/systemd/system/kiosk.service << 'EOF'
@@ -47,6 +49,9 @@ After=network.target evcc.service
 
 [Service]
 User=kiosk
+# Persistent home so WPEWebKit stores its profile (incl. the dark-mode preference) on disk
+Environment=HOME=/var/lib/kiosk
+WorkingDirectory=/var/lib/kiosk
 Environment=COG_PLATFORM_DRM_VIDEO_DEVICE=/dev/dri/card0
 # Tell WPEWebKit this is a small device so it sizes its internal caches conservatively (256 MiB)
 Environment=WPE_RAM_SIZE=268435456
