@@ -1,5 +1,7 @@
 # evcc-kiosk
-Configuration for a Raspberry Pi Zero 2 W with a Waveshare ZERO-DISP-7a display running EVCC server and UI in kiosk mode
+Configuration for a Raspberry Pi Zero 2 W with a Waveshare ZERO-DISP-7a display running EVCC server and a custom lightweight UI in kiosk mode
+
+<img src="docs/screenshot.png" alt="The custom EVCC kiosk UI in portrait, showing solar/grid/home power, a home-battery gauge, vehicle charge status, energy stats, and charge-mode buttons" width="320">
 
 ## Pre-requisites
 
@@ -38,9 +40,8 @@ When you run it follow the options below to load the EVCC specific version to yo
 9. Reconnect to the device via SSH with the new password
 10. Configure the device by running this command":
     - `curl -sSL https://raw.githubusercontent.com/AdamBearWA/evcc-kiosk/main/configure.sh | sudo bash`
-11. Set the display to dark mode (one-off):
-    1. On the device's touchscreen, open the evcc menu and switch the theme to **Dark**
-    2. This only needs to be done once. The preference is saved to the kiosk user's browser profile under `/var/lib/kiosk`, so it persists across the nightly browser restart and across reboots.
+
+`configure.sh` installs a custom kiosk UI (`kiosk/index.html`) to `/var/lib/kiosk/` and points the browser at it. The page is dark-themed out of the box, so no one-off theme setup is needed.
 
 ## Maintenance
 
@@ -59,10 +60,22 @@ sudo reboot
 
 ## Performance
 
-The Pi Zero 2 W is a modest device (quad-core Cortex-A53 at 1 GHz, 512 MB RAM), so `tweaks.sh` and `configure.sh` deliberately tune it for kiosk responsiveness:
+The Pi Zero 2 W is a modest device (quad-core Cortex-A53 at 1 GHz, 512 MB RAM), and EVCC's stock single-page app — Vue with an animated SVG energy-flow diagram and charts — is **CPU-bound** on this weak core: rendered locally, each touch takes 2–3 s to repaint, while the same instance is instant from a remote browser running on faster hardware. The CPU is the ultimate limit on how fast that app can repaint here.
 
-* **CPU governor** is pinned to `performance` so all cores stay at full clock instead of idling at 600 MHz and ramping up only after load appears.
-* **Swappiness** is kept at 100, which is correct for the zram swap device: cheap, compressed anonymous pages go to zram while executable code pages stay resident in RAM (a lower value forces code to be re-read from the slow SD card).
-* **Browser memory limits** (`MemoryHigh`/`MemoryMax` on `kiosk.service`) are sized to sit above the browser's transient per-interaction memory spike, so the kernel's cgroup throttle does not stall the render thread on every touch.
+The local display therefore runs a **custom lightweight UI** instead (see below); it is the single biggest factor in the kiosk's responsiveness. Alongside it, `tweaks.sh` and `configure.sh` apply a few targeted measures:
 
-Note that the **local touchscreen UI is inherently CPU-bound**: the Pi renders EVCC's full web app on a weak core, so on-screen updates are slower than the same EVCC instance viewed from a remote browser (which renders on more powerful hardware). The tuning above removes the avoidable stalls, but the device's CPU is the ultimate limit on local touch responsiveness.
+* **OOM safety ceiling** — `MemoryMax` on `kiosk.service` caps the browser cgroup, so a slow WPEWebKit memory leak is restarted rather than triggering a system-wide OOM that could take down `evcc`.
+* **Unused services disabled** — `avahi`, `bluetooth` and `rpcbind` are turned off to trim the footprint and attack surface.
+* **SD-card wear reduction** — volatile journald storage and a tmpfs `/tmp`.
+
+### The custom kiosk UI
+
+The local display loads a purpose-built page, `kiosk/index.html`, installed to `/var/lib/kiosk/index.html` and opened directly by Cog over `file://`:
+
+* **Plain DOM, inline CSS, vanilla JS** — no framework, no animated SVG, no charts. Each update rewrites a few text nodes, so a touch is a trivial repaint rather than a full re-render.
+* **Talks directly to EVCC** on `http://localhost:7070` — it reads `/api/state`, streams live updates over the `/ws` websocket, and posts charge-mode changes to `/api/loadpoints/{id}/mode/{mode}`. EVCC sends `Access-Control-Allow-Origin: *` and does not origin-check `/ws`, so the `file://` page needs **no reverse proxy**.
+* **No external/CDN assets** — fully self-contained for an offline kiosk.
+
+The screenshot above is produced by [`tools/screenshot/`](tools/screenshot/), which renders the page in a headless browser with sample data; run `npm run shot` there to regenerate it after UI changes.
+
+The browser's resident set sits at around **62 MiB**, well within the `MemoryMax` ceiling, and zram swap use stays low — light enough that the CPU governor can stay on the stock `ondemand` setting while touch remains responsive.

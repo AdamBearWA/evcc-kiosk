@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>EVCC Kiosk</title>
+<style>
+  /* Featherweight kiosk styling: plain DOM, no animation, no SVG. Sized for the Waveshare 7" panel
+     rotated to portrait (~600px wide x 1024px tall). Type and spacing scale with viewport height
+     (rem driven by a vh-based root font-size) so the layout fills the panel and stays legible at a
+     glance; clamp() keeps it sane if the viewport differs. */
+  :root {
+    --bg: #0e1116;
+    --card: #171c24;
+    --card-hi: #1f2630;
+    --line: #2a323e;
+    --text: #e8edf2;
+    --muted: #8b97a6;
+    --accent: #34c759;
+    --import: #ff6b5e;
+    --export: #34c759;
+    --amber: #f0c45a;
+    --idle: #4a5562;
+  }
+  html { font-size: clamp(16px, 2.05vh, 26px); }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "DejaVu Sans", -apple-system, "Helvetica Neue", Arial, sans-serif;
+    height: 100%; width: 100%;
+    overflow: hidden;
+    -webkit-user-select: none; user-select: none;
+  }
+  /* Sections flow top-down with a uniform gap (same as the horizontal gaps in the grids/strip).
+     The cards and button block grow to fill the panel; their content is distributed with
+     space-between so the spare height becomes spacing between elements, not a blank pocket. */
+  body { display: flex; flex-direction: column; padding: 0.6rem; gap: 0.55rem; }
+
+  header { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; }
+  .hdr-left { display: flex; align-items: baseline; gap: 0.5rem; }
+  #clock { font-size: 1.45rem; font-weight: 800; letter-spacing: 0.5px; }
+  #date { font-size: 0.95rem; color: var(--muted); font-weight: 600; }
+  .hdr-right { display: flex; align-items: center; gap: 0.45rem; }
+  #site-title { font-size: 0.95rem; color: var(--muted); font-weight: 600; }
+  #conn { display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 50%; background: var(--idle); }
+  #conn.ok { background: var(--accent); }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.55rem; flex: 0 0 auto; }
+  .tile { background: var(--card); border-radius: 0.6rem; padding: 0.7rem 0.6rem; border: 1px solid var(--line); }
+  .tile .label { font-size: 0.85rem; color: var(--muted); }
+  .tile .value { font-size: 1.75rem; font-weight: 700; margin-top: 0.2rem; line-height: 1.05; }
+  .tile .unit { font-size: 0.85rem; font-weight: 500; color: var(--muted); margin-left: 0.15rem; }
+  .tile .sub { font-size: 0.78rem; color: var(--muted); margin-top: 0.2rem; min-height: 1rem; }
+  .sub.import { color: var(--import); }
+  .sub.export { color: var(--export); }
+
+  /* Cards grow to fill spare height but may also shrink (min-height:0 + overflow:hidden) so a busy
+     state never pushes the mode buttons off-screen - the cards absorb the squeeze, the buttons do
+     not. flex-basis:auto so each card's natural size is its content (no clipping when there's room). */
+  .card { background: var(--card); border-radius: 0.7rem; padding: 0.8rem; border: 1px solid var(--line);
+    display: flex; flex-direction: column; justify-content: space-between; gap: 0.35rem;
+    min-height: 0; overflow: hidden; }
+  .card[hidden] { display: none; }
+  #battery-card { flex: 1 1 auto; }
+  #vehicle { flex: 2.2 1 auto; }
+
+  /* gauges (home battery + vehicle charge) */
+  .gauge-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .gauge-head .gname { font-size: 1.1rem; font-weight: 600; }
+  .gauge-head .gpct { font-size: 2rem; font-weight: 800; }
+  .sub-head .gname { font-size: 0.9rem; color: var(--muted); font-weight: 600; }
+  .sub-head .gpct { font-size: 1.4rem; }
+  .gauge {
+    position: relative; height: 1.15rem; background: #0c1015; border: 1px solid var(--line);
+    border-radius: 0.58rem; overflow: hidden; margin: 0.45rem 0 0.3rem;
+  }
+  .gauge .fill { height: 100%; width: 0; background: linear-gradient(90deg, #2a9d5a, #46c97a); }
+  .gauge .fill.low { background: linear-gradient(90deg, #c2562f, #e8804a); }
+  .gauge .fill.car { background: linear-gradient(90deg, #2f7fd6, #4aa8ff); }
+  .gauge .target { position: absolute; top: 0; bottom: 0; width: 3px; background: #fff; }
+  .gauge .target[hidden] { display: none; }
+  .gauge-sub { display: flex; justify-content: space-between; font-size: 0.88rem; color: var(--muted); }
+  .veh-none { font-size: 0.9rem; color: var(--muted); }
+  .veh-none[hidden] { display: none; }
+
+  .title { font-size: 1.25rem; font-weight: 600; display: flex; justify-content: space-between; align-items: baseline; }
+  .status { font-size: 0.95rem; color: var(--muted); font-weight: 500; }
+  .status.live { color: var(--accent); }
+  .status.wait { color: var(--amber); }
+
+  .energy-row { display: flex; gap: 0.55rem; }
+  .energy { flex: 1; background: var(--card-hi); border-radius: 0.5rem; padding: 0.6rem 0.4rem; text-align: center; }
+  .energy .label { font-size: 0.8rem; color: var(--muted); }
+  .energy .value { font-size: 1.55rem; font-weight: 700; margin-top: 0.15rem; }
+  .energy .unit { font-size: 0.8rem; color: var(--muted); margin-left: 0.1rem; font-weight: 500; }
+
+  .note {
+    background: #2a2410; border: 1px solid #5a4a15; color: var(--amber);
+    border-radius: 0.5rem; padding: 0.6rem 0.7rem; font-size: 0.88rem; line-height: 1.35;
+  }
+  /* CSS-drawn cue dot - avoids depending on an emoji font, which WPEWebKit lacks here */
+  .note::before {
+    content: ""; display: inline-block; width: 0.5rem; height: 0.5rem; border-radius: 50%;
+    background: var(--amber); margin-right: 0.45rem; vertical-align: baseline;
+  }
+  .note[hidden] { display: none; }
+
+  .strip { display: flex; gap: 0.55rem; flex: 0 0 auto; }
+  .strip .s { flex: 1; background: var(--card); border: 1px solid var(--line); border-radius: 0.6rem; padding: 0.6rem 0.4rem; text-align: center; }
+  .strip .s .l { font-size: 0.75rem; color: var(--muted); }
+  .strip .s .v { font-size: 1.2rem; font-weight: 700; margin-top: 0.15rem; }
+
+  /* Buttons take their natural height and never shrink (flex-shrink:0), so they stay fully visible;
+     they grow to share spare space in lighter states. */
+  .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; flex: 1.2 0 auto; }
+  .mode-btn {
+    background: var(--card); border: 2px solid var(--line); border-radius: 0.7rem; color: var(--text);
+    font-size: 1.4rem; font-weight: 700; padding: 1.05rem 0; cursor: pointer; transition: none;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.15rem;
+  }
+  .mode-btn .hint { font-size: 0.78rem; font-weight: 500; color: var(--muted); }
+  .mode-btn.active { background: var(--accent); border-color: var(--accent); color: #062012; }
+  .mode-btn.active .hint { color: #0a3d22; }
+  .mode-btn.pending { opacity: 0.55; }
+</style>
+</head>
+<body>
+  <header>
+    <span class="hdr-left"><span id="clock">--:--</span><span id="date"></span></span>
+    <span class="hdr-right"><span id="site-title">EVCC</span><span id="conn" title="connection"></span></span>
+  </header>
+
+  <section class="grid" id="power">
+    <div class="tile"><div class="label">Solar</div><div class="value"><span id="pv-v">–</span><span class="unit" id="pv-u">W</span></div><div class="sub" id="pv-s"></div></div>
+    <div class="tile"><div class="label">Grid</div><div class="value"><span id="grid-v">–</span><span class="unit" id="grid-u">W</span></div><div class="sub" id="grid-s"></div></div>
+    <div class="tile"><div class="label">Home</div><div class="value"><span id="home-v">–</span><span class="unit" id="home-u">W</span></div><div class="sub" id="home-s">&nbsp;</div></div>
+  </section>
+
+  <section class="card" id="battery-card" hidden>
+    <div class="gauge-head"><span class="gname">Home Battery</span><span class="gpct"><span id="bat-soc">–</span>%</span></div>
+    <div class="gauge"><div class="fill" id="bat-fill"></div></div>
+    <div class="gauge-sub"><span id="bat-state">–</span><span id="bat-stored"></span></div>
+  </section>
+
+  <section class="card" id="vehicle">
+    <div class="title">
+      <span id="veh-title">Vehicle</span>
+      <span class="status" id="veh-status">–</span>
+    </div>
+
+    <div id="veh-soc-wrap" hidden>
+      <div class="gauge-head sub-head"><span class="gname">Vehicle charge</span><span class="gpct" id="veh-soc-pct">–</span></div>
+      <div class="gauge"><div class="fill car" id="veh-soc-fill"></div><div class="target" id="veh-soc-target" hidden></div></div>
+      <div class="gauge-sub"><span id="veh-range"></span><span id="veh-limit"></span></div>
+    </div>
+    <div class="veh-none" id="veh-soc-none">Vehicle SoC not reported</div>
+
+    <div class="energy-row">
+      <div class="energy"><div class="label">Charging now</div><div class="value"><span id="charge-v">–</span><span class="unit" id="charge-u">W</span></div></div>
+      <div class="energy"><div class="label">This session</div><div class="value"><span id="sess-v">–</span><span class="unit">kWh</span></div></div>
+      <div class="energy"><div class="label">Today</div><div class="value"><span id="today-v">–</span><span class="unit">kWh</span></div></div>
+    </div>
+    <div class="note" id="charge-note" hidden></div>
+  </section>
+
+  <section class="strip" id="stats">
+    <div class="s"><div class="l">Solar (30d)</div><div class="v" id="stat-solar">–</div></div>
+    <div class="s"><div class="l">Import /kWh</div><div class="v" id="stat-import">–</div></div>
+    <div class="s"><div class="l">Feed-in /kWh</div><div class="v" id="stat-feedin">–</div></div>
+  </section>
+
+  <section class="modes" id="modes">
+    <button class="mode-btn" data-mode="off">Off</button>
+    <button class="mode-btn" data-mode="pv">Solar<span class="hint">PV only</span></button>
+    <button class="mode-btn" data-mode="minpv">Min + Solar<span class="hint">Min + PV</span></button>
+    <button class="mode-btn" data-mode="now">Fast<span class="hint">Charge now</span></button>
+  </section>
+
+<script>
+(function () {
+  "use strict";
+
+  // EVCC is reachable on the same host. Absolute URL so the page works whether it
+  // is loaded from file:// (Origin: null) or from a same-host static server -
+  // EVCC sends Access-Control-Allow-Origin: * and does not origin-check /ws.
+  var BASE = "http://" + (location.hostname || "localhost") + ":7070";
+  if (location.protocol === "file:") BASE = "http://localhost:7070";
+  var WS = BASE.replace(/^http/, "ws") + "/ws";
+
+  // Loadpoint we control. EVCC loadpoint ids start at 1; index 0 -> id 1.
+  var LP = 0;
+  var LP_ID = LP + 1;
+
+  // -- helpers -------------------------------------------------------------
+  function num(x) { return typeof x === "number" ? x : (x ? parseFloat(x) || 0 : 0); }
+  function fmtPower(w) {
+    var a = Math.abs(w);
+    if (a >= 1000) return { v: (w / 1000).toFixed(a >= 10000 ? 0 : 1), u: "kW" };
+    return { v: String(Math.round(w)), u: "W" };
+  }
+  function text(id, s) {
+    var el = document.getElementById(id);
+    if (el && el.textContent !== s) el.textContent = s; // cheap: skip no-op writes
+  }
+  function setPower(idV, idU, w) { var f = fmtPower(w); text(idV, f.v); text(idU, f.u); }
+  function show(id, visible) { var el = document.getElementById(id); if (el) el.hidden = !visible; }
+  function curSym(c) { return { AUD: "$", USD: "$", NZD: "$", CAD: "$", EUR: "€", GBP: "£" }[c] || (c ? c + " " : "$"); }
+
+  // -- live state ----------------------------------------------------------
+  // Flat key store. Site values arrive as nested objects/scalars; loadpoint
+  // values arrive as dotted keys ("loadpoints.0.chargePower").
+  var st = {};
+  function get(k) { return st[k]; }
+  function lpv(name) { return st["loadpoints." + LP + "." + name]; }
+
+  // -- renderers (update text nodes only; structure never re-rendered) -----
+  function renderPower() {
+    setPower("pv-v", "pv-u", num(get("pvPower")));
+
+    var grid = get("grid");
+    var gp = grid ? num(grid.power) : 0;
+    setPower("grid-v", "grid-u", Math.abs(gp));
+    var gs = document.getElementById("grid-s");
+    if (gp > 1) { gs.textContent = "importing"; gs.className = "sub import"; }
+    else if (gp < -1) { gs.textContent = "exporting"; gs.className = "sub export"; }
+    else { gs.textContent = "balanced"; gs.className = "sub"; }
+
+    setPower("home-v", "home-u", num(get("homePower")));
+  }
+
+  function renderBattery() {
+    var bat = get("battery");
+    if (!bat || bat.soc == null) { show("battery-card", false); return; }
+    show("battery-card", true);
+    var soc = Math.round(num(bat.soc));
+    text("bat-soc", String(soc));
+    var fill = document.getElementById("bat-fill");
+    fill.style.width = Math.max(0, Math.min(100, soc)) + "%";
+    fill.className = "fill" + (soc <= 20 ? " low" : "");
+    var bp = num(bat.power);
+    var f = fmtPower(Math.abs(bp));
+    text("bat-state", bp > 1 ? "Discharging · " + f.v + " " + f.u
+      : bp < -1 ? "Charging · " + f.v + " " + f.u
+      : "Idle");
+    var cap = num(bat.capacity);
+    text("bat-stored", cap > 0 ? (cap * soc / 100).toFixed(1) + " / " + cap.toFixed(1) + " kWh" : "");
+  }
+
+  function renderVehicle() {
+    text("veh-title", lpv("vehicleTitle") || lpv("title") || "Vehicle");
+
+    var connected = !!lpv("connected");
+    var charging = !!lpv("charging");
+    var mode = lpv("mode");
+    var soc = num(lpv("vehicleSoc"));
+
+    // "armed" = plugged in and set to a charging mode, but not yet drawing power.
+    var armed = connected && mode && mode !== "off" && !charging;
+    // In Solar mode with no usable surplus, charging won't begin until the panels produce enough -
+    // an open-ended wait, distinct from the brief enable delay after a mode change. EVCC's pvAction
+    // is "enable" only when surplus is present and it is actually counting down to start.
+    var solarWaiting = armed && mode === "pv" && lpv("pvAction") !== "enable";
+
+    var statusEl = document.getElementById("veh-status");
+    var label = charging ? "Charging"
+      : solarWaiting ? "Waiting for sun"
+      : armed ? "Starting…"
+      : connected ? "Connected"
+      : "Disconnected";
+    statusEl.textContent = label;
+    statusEl.className = "status" + (charging ? " live" : armed ? " wait" : "");
+
+    // Vehicle charge gauge: shown only when the car reports SoC.
+    var reported = soc > 0;
+    show("veh-soc-wrap", reported);
+    show("veh-soc-none", !reported);
+    if (reported) {
+      text("veh-soc-pct", soc + "%");
+      document.getElementById("veh-soc-fill").style.width = Math.min(100, soc) + "%";
+      var limit = num(lpv("effectiveLimitSoc")) || num(lpv("limitSoc"));
+      var tgt = document.getElementById("veh-soc-target");
+      if (limit > 0 && limit < 100) { tgt.hidden = false; tgt.style.left = limit + "%"; text("veh-limit", "limit " + limit + "%"); }
+      else { tgt.hidden = true; text("veh-limit", ""); }
+      var range = num(lpv("vehicleRange"));
+      text("veh-range", range > 0 ? "~" + Math.round(range) + " km range" : "");
+    }
+
+    var note = document.getElementById("charge-note");
+    note.hidden = !armed;
+    note.textContent = solarWaiting
+      ? "In Solar mode, charging starts once there's enough solar surplus."
+      : "Charging starts a short while after a mode change - this delay is normal.";
+
+    setPower("charge-v", "charge-u", num(lpv("chargePower")));
+    var sess = num(lpv("sessionEnergy")) / 1000; // sessionEnergy is Wh
+    text("sess-v", sess.toFixed(sess >= 10 ? 1 : 2));
+    renderToday();
+  }
+
+  function renderToday() {
+    var today = num(st._todayKWh);
+    // Add the live session if EVCC has not yet written an open row for it,
+    // so the figure stays current mid-charge without double counting.
+    if (lpv("charging") && !st._todayHasOpen) today += num(lpv("sessionEnergy")) / 1000;
+    text("today-v", today.toFixed(today >= 10 ? 1 : 2));
+  }
+
+  function renderStats() {
+    var stats = get("statistics");
+    var share = (stats && stats["30d"]) ? Math.round(num(stats["30d"].solarPercentage)) : null;
+    text("stat-solar", share == null ? "–" : share + "%");
+    var sym = curSym(get("currency"));
+    var imp = get("tariffGrid"), fed = get("tariffFeedIn");
+    text("stat-import", imp != null ? sym + num(imp).toFixed(2) : "–");
+    text("stat-feedin", fed != null ? sym + num(fed).toFixed(2) : "–");
+  }
+
+  function renderModes() {
+    var mode = lpv("mode");
+    var btns = document.querySelectorAll(".mode-btn");
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].classList.toggle("active", btns[i].getAttribute("data-mode") === mode);
+      btns[i].classList.remove("pending");
+    }
+  }
+
+  function renderAll() {
+    renderPower(); renderBattery(); renderVehicle(); renderStats(); renderModes();
+    text("site-title", get("siteTitle") || "EVCC");
+  }
+
+  // -- clock ---------------------------------------------------------------
+  var DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function updateClock() {
+    var d = new Date(), h = d.getHours(), m = d.getMinutes();
+    text("clock", (h < 10 ? "0" : "") + h + ":" + (m < 10 ? "0" : "") + m);
+    text("date", DAYS[d.getDay()] + " " + d.getDate() + " " + MONTHS[d.getMonth()]);
+  }
+
+  // -- websocket ingest ----------------------------------------------------
+  var ws = null;
+  function setConn(ok) { document.getElementById("conn").className = ok ? "ok" : ""; }
+  function applyMsg(obj) {
+    for (var k in obj) if (obj.hasOwnProperty(k)) st[k] = obj[k];
+    renderAll();
+  }
+  function connect() {
+    try { ws = new WebSocket(WS); } catch (e) { scheduleReconnect(); return; }
+    ws.onopen = function () { setConn(true); };
+    ws.onmessage = function (ev) { try { applyMsg(JSON.parse(ev.data)); } catch (e) {} };
+    ws.onclose = function () { setConn(false); scheduleReconnect(); };
+    ws.onerror = function () { try { ws.close(); } catch (e) {} };
+  }
+  var reconnectTimer = null;
+  function scheduleReconnect() {
+    if (reconnectTimer) return;
+    reconnectTimer = setTimeout(function () { reconnectTimer = null; connect(); }, 3000);
+  }
+
+  // -- "today" energy from the sessions log --------------------------------
+  function refreshToday() {
+    fetch(BASE + "/api/sessions", { cache: "no-store" })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var arr = Array.isArray(data) ? data : (data && data.result) || [];
+        var now = new Date();
+        var sum = 0, open = false;
+        for (var i = 0; i < arr.length; i++) {
+          var s = arr[i];
+          var ts = s.created || s.finished;
+          if (!ts) continue;
+          var d = new Date(ts);
+          if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()) {
+            sum += num(s.chargedEnergy);
+            if (!s.finished) open = true;
+          }
+        }
+        st._todayKWh = sum;
+        st._todayHasOpen = open;
+        renderToday();
+      })
+      .catch(function () { /* leave previous value */ });
+  }
+
+  // -- mode buttons --------------------------------------------------------
+  function initButtons() {
+    var btns = document.querySelectorAll(".mode-btn");
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].addEventListener("click", function () {
+        var mode = this.getAttribute("data-mode");
+        // optimistic: update state now so the highlight AND the charge-status hint both appear on
+        // this touch, before the server round-trip and the next WS frame land.
+        var all = document.querySelectorAll(".mode-btn");
+        for (var j = 0; j < all.length; j++) all[j].classList.remove("active");
+        this.classList.add("active");
+        this.classList.add("pending");
+        var btn = this;
+        st["loadpoints." + LP + ".mode"] = mode;
+        renderVehicle();
+        fetch(BASE + "/api/loadpoints/" + LP_ID + "/mode/" + mode, { method: "POST", cache: "no-store" })
+          .then(function () { btn.classList.remove("pending"); renderModes(); })
+          .catch(function () { btn.classList.remove("pending"); });
+      }, { passive: true });
+    }
+  }
+
+  // -- boot ----------------------------------------------------------------
+  initButtons();
+  updateClock();
+  setInterval(updateClock, 10000);
+  connect();
+  refreshToday();
+  setInterval(refreshToday, 60000); // sessions change rarely; 1/min is plenty
+})();
+</script>
+</body>
+</html>
