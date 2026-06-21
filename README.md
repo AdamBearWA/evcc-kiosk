@@ -76,4 +76,6 @@ The local display loads a purpose-built page, `kiosk/index.html`, installed to `
 * **Talks directly to EVCC** on `http://localhost:7070` — it reads `/api/state`, streams live updates over the `/ws` websocket, and posts charge-mode changes to `/api/loadpoints/{id}/mode/{mode}`. EVCC sends `Access-Control-Allow-Origin: *` and does not origin-check `/ws`, so the `file://` page needs **no reverse proxy**.
 * **No external/CDN assets** — fully self-contained for an offline kiosk.
 
+The screenshot above is produced by [`tools/screenshot/`](tools/screenshot/), which renders the page in a headless browser with sample data; run `npm run shot` there to regenerate it after UI changes.
+
 The browser's resident set sits at around **62 MiB**, well within the `MemoryMax` ceiling, and zram swap use stays low — light enough that the CPU governor can stay on the stock `ondemand` setting while touch remains responsive.
