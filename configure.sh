@@ -53,6 +53,12 @@ Environment=WPE_RAM_SIZE=268435456
 ExecStart=/usr/local/bin/cog --platform=drm --platform-params=renderer=gles,rotation=1 http://localhost:7070
 Restart=always
 RestartSec=5
+# Bound browser memory: WebKit's memory-pressure handler reacts to MemoryHigh by shedding
+# caches; MemoryMax is a hard ceiling so a runaway browser is restarted instead of triggering
+# a system-wide OOM that could kill evcc.
+MemoryAccounting=yes
+MemoryHigh=200M
+MemoryMax=260M
 
 [Install]
 WantedBy=multi-user.target
