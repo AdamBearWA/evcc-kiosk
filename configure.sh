@@ -112,10 +112,9 @@ EOF
 sudo systemctl disable --now apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true
 
 # One ordered nightly job: update package lists, apply security + evcc upgrades (needrestart
-# restarts any affected services so patches take effect), then recycle the browser exactly once -
-# reboot if needrestart reports a kernel reboot is required (which also clears the WPEWebKit
-# leak), otherwise just restart the kiosk browser. The leading '-' on the apt steps makes them
-# non-fatal, so the browser is recycled even if an update step fails.
+# restarts any affected services so patches take effect), then reboot. The unconditional reboot
+# clears the WPEWebKit memory leak that accumulates over the day. The leading '-' on the apt
+# steps makes them non-fatal, so the reboot happens even if an update step fails.
 sudo tee /etc/systemd/system/kiosk-update.service << 'EOF'
 [Unit]
 Description=Nightly apt update, unattended security/evcc upgrades, and browser recycle
@@ -126,7 +125,7 @@ Wants=network-online.target
 Type=oneshot
 ExecStart=-/usr/bin/apt-get update -qq
 ExecStart=-/usr/bin/unattended-upgrade -v
-ExecStart=/usr/bin/bash -c 'if needrestart -bk 2>/dev/null | grep -q "^NEEDRESTART-KSTA: 3"; then systemctl reboot; else systemctl restart kiosk.service; fi'
+ExecStart=/bin/systemctl reboot
 EOF
 
 sudo tee /etc/systemd/system/kiosk-update.timer << 'EOF'
