@@ -77,10 +77,28 @@ MemoryMax=340M
 WantedBy=multi-user.target
 EOF
 
-# Enable and start the kiosk service
+# Serve the kiosk UI over HTTP on port 8080 so it can be viewed from any browser on the local
+# network. busybox httpd is already present on this Armbian image so no extra packages are
+# needed. The -f flag keeps the process in the foreground so systemd owns the lifecycle.
+sudo tee /etc/systemd/system/kiosk-ui.service << 'EOF'
+[Unit]
+Description=Kiosk UI HTTP server
+After=network.target
+
+[Service]
+User=kiosk
+ExecStart=/bin/busybox httpd -f -p 8080 -h /var/lib/kiosk
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Enable and start the kiosk service and the HTTP server
 sudo systemctl daemon-reload
-sudo systemctl enable kiosk.service
-sudo systemctl start kiosk.service
+sudo systemctl enable kiosk.service kiosk-ui.service
+sudo systemctl start kiosk.service kiosk-ui.service
 
 # Install unattended-upgrades for automatic security + evcc updates, plus needrestart to restart
 # services affected by library upgrades (so security patches take effect without a full reboot)
