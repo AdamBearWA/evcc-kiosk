@@ -56,6 +56,18 @@ The kiosk clock shows the device's **local time**, so the device needs the corre
 sudo timedatectl set-timezone Australia/Perth   # list all options with: timedatectl list-timezones
 ```
 
+## Remote access
+
+The device exposes three HTTP interfaces on the local network:
+
+| Port | Interface |
+|------|-----------|
+| `7070` | EVCC full UI and API |
+| `8080` | Lightweight kiosk UI (same page shown on the display) |
+| `9090` | EVCC admin UI |
+
+Open `http://evcc:8080` from any browser on your network to view the kiosk UI remotely. Because the page derives the EVCC host from `location.hostname`, it automatically points at the Pi's API when served over HTTP — no configuration needed.
+
 ## Maintenance
 
 The device maintains itself nightly at 04:00 via the `kiosk-update.timer` systemd timer, which runs a single ordered job:
