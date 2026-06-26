@@ -21,8 +21,9 @@
     --export: #34c759;
     --amber: #f0c45a;
     --idle: #4a5562;
+    --car: #4aa8ff;
   }
-  html { font-size: clamp(16px, 2.05vh, 26px); }
+  html { font-size: clamp(16px, 2.0vh, 26px); }
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   html, body {
     background: var(--bg);
@@ -35,7 +36,7 @@
   /* Sections flow top-down with a uniform gap (same as the horizontal gaps in the grids/strip).
      The cards and button block grow to fill the panel; their content is distributed with
      space-between so the spare height becomes spacing between elements, not a blank pocket. */
-  body { display: flex; flex-direction: column; padding: 0.6rem; gap: 0.55rem; }
+  body { display: flex; flex-direction: column; padding: 0.55rem; gap: 0.5rem; }
 
   header { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; }
   .hdr-left { display: flex; align-items: baseline; gap: 0.5rem; }
@@ -46,10 +47,10 @@
   #conn { display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 50%; background: var(--idle); }
   #conn.ok { background: var(--accent); }
 
-  .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.55rem; flex: 0 0 auto; }
-  .tile { background: var(--card); border-radius: 0.6rem; padding: 0.7rem 0.6rem; border: 1px solid var(--line); }
+  .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; flex: 0 0 auto; }
+  .tile { background: var(--card); border-radius: 0.6rem; padding: 0.65rem 0.55rem; border: 1px solid var(--line); }
   .tile .label { font-size: 0.85rem; color: var(--muted); }
-  .tile .value { font-size: 1.75rem; font-weight: 700; margin-top: 0.2rem; line-height: 1.05; }
+  .tile .value { font-size: 1.7rem; font-weight: 700; margin-top: 0.2rem; line-height: 1.05; }
   .tile .unit { font-size: 0.85rem; font-weight: 500; color: var(--muted); margin-left: 0.15rem; }
   .tile .sub { font-size: 0.78rem; color: var(--muted); margin-top: 0.2rem; min-height: 1rem; }
   .sub.import { color: var(--import); }
@@ -58,12 +59,12 @@
   /* Cards grow to fill spare height but may also shrink (min-height:0 + overflow:hidden) so a busy
      state never pushes the mode buttons off-screen - the cards absorb the squeeze, the buttons do
      not. flex-basis:auto so each card's natural size is its content (no clipping when there's room). */
-  .card { background: var(--card); border-radius: 0.7rem; padding: 0.8rem; border: 1px solid var(--line);
-    display: flex; flex-direction: column; justify-content: space-between; gap: 0.35rem;
+  .card { background: var(--card); border-radius: 0.7rem; padding: 0.75rem; border: 1px solid var(--line);
+    display: flex; flex-direction: column; justify-content: space-between; gap: 0.3rem;
     min-height: 0; overflow: hidden; }
   .card[hidden] { display: none; }
   #battery-card { flex: 1 1 auto; }
-  #vehicle { flex: 2.2 1 auto; }
+  #vehicle { flex: 2 1 auto; }
 
   /* gauges (home battery + vehicle charge) */
   .gauge-head { display: flex; justify-content: space-between; align-items: baseline; }
@@ -72,8 +73,8 @@
   .sub-head .gname { font-size: 0.9rem; color: var(--muted); font-weight: 600; }
   .sub-head .gpct { font-size: 1.4rem; }
   .gauge {
-    position: relative; height: 1.15rem; background: #0c1015; border: 1px solid var(--line);
-    border-radius: 0.58rem; overflow: hidden; margin: 0.45rem 0 0.3rem;
+    position: relative; height: 1.1rem; background: #0c1015; border: 1px solid var(--line);
+    border-radius: 0.55rem; overflow: hidden; margin: 0.4rem 0 0.3rem;
   }
   .gauge .fill { height: 100%; width: 0; background: linear-gradient(90deg, #2a9d5a, #46c97a); }
   .gauge .fill.low { background: linear-gradient(90deg, #c2562f, #e8804a); }
@@ -89,15 +90,15 @@
   .status.live { color: var(--accent); }
   .status.wait { color: var(--amber); }
 
-  .energy-row { display: flex; gap: 0.55rem; }
-  .energy { flex: 1; background: var(--card-hi); border-radius: 0.5rem; padding: 0.6rem 0.4rem; text-align: center; }
+  .energy-row { display: flex; gap: 0.5rem; }
+  .energy { flex: 1; background: var(--card-hi); border-radius: 0.5rem; padding: 0.55rem 0.4rem; text-align: center; }
   .energy .label { font-size: 0.8rem; color: var(--muted); }
-  .energy .value { font-size: 1.55rem; font-weight: 700; margin-top: 0.15rem; }
+  .energy .value { font-size: 1.5rem; font-weight: 700; margin-top: 0.15rem; }
   .energy .unit { font-size: 0.8rem; color: var(--muted); margin-left: 0.1rem; font-weight: 500; }
 
   .note {
     background: #2a2410; border: 1px solid #5a4a15; color: var(--amber);
-    border-radius: 0.5rem; padding: 0.6rem 0.7rem; font-size: 0.88rem; line-height: 1.35;
+    border-radius: 0.5rem; padding: 0.55rem 0.7rem; font-size: 0.88rem; line-height: 1.35;
   }
   /* CSS-drawn cue dot - avoids depending on an emoji font, which WPEWebKit lacks here */
   .note::before {
@@ -106,23 +107,56 @@
   }
   .note[hidden] { display: none; }
 
-  .strip { display: flex; gap: 0.55rem; flex: 0 0 auto; }
-  .strip .s { flex: 1; background: var(--card); border: 1px solid var(--line); border-radius: 0.6rem; padding: 0.6rem 0.4rem; text-align: center; }
+  .strip { display: flex; gap: 0.5rem; flex: 0 0 auto; }
+  .strip .s { flex: 1; background: var(--card); border: 1px solid var(--line); border-radius: 0.6rem; padding: 0.55rem 0.4rem; text-align: center; }
   .strip .s .l { font-size: 0.75rem; color: var(--muted); }
   .strip .s .v { font-size: 1.2rem; font-weight: 700; margin-top: 0.15rem; }
 
   /* Buttons take their natural height and never shrink (flex-shrink:0), so they stay fully visible;
      they grow to share spare space in lighter states. */
-  .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; flex: 1.2 0 auto; }
+  .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; flex: 1 0 auto; }
   .mode-btn {
     background: var(--card); border: 2px solid var(--line); border-radius: 0.7rem; color: var(--text);
-    font-size: 1.4rem; font-weight: 700; padding: 1.05rem 0; cursor: pointer; transition: none;
+    font-size: 1.4rem; font-weight: 700; padding: 0.85rem 0; cursor: pointer; transition: none;
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.15rem;
   }
   .mode-btn .hint { font-size: 0.78rem; font-weight: 500; color: var(--muted); }
   .mode-btn.active { background: var(--accent); border-color: var(--accent); color: #062012; }
   .mode-btn.active .hint { color: #0a3d22; }
   .mode-btn.pending { opacity: 0.55; }
+
+  /* Manual charge control. Doubles as a live readout: when engaged it is green and the big
+     draggable track sets the charge current (Amps), with the kW equivalent shown live. In any
+     other mode it turns blue and mirrors the actual charge value EVCC reports - grab it to take
+     over into manual. */
+  .manual {
+    background: var(--card); border: 2px solid var(--line); border-radius: 0.7rem;
+    padding: 0.7rem 0.85rem; display: flex; flex-direction: column; gap: 0.5rem; flex: 0 0 auto;
+  }
+  .manual.active { border-color: var(--accent); }
+  .manual-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .manual-head .mname { font-size: 1.1rem; font-weight: 700; color: var(--text); }
+  .manual.active .manual-head .mname { color: var(--accent); }
+  .manual-head .mhint { font-size: 0.72rem; color: var(--muted); }
+  .manual-val { display: flex; align-items: baseline; gap: 0.3rem; }
+  .manual-val .ma { font-size: 2.2rem; font-weight: 800; line-height: 1; }
+  .manual-val .ua { font-size: 0.95rem; color: var(--muted); font-weight: 600; }
+  .manual-val .mkw { font-size: 1.1rem; font-weight: 700; color: var(--car); margin-left: auto; }
+  .manual.active .manual-val .mkw { color: var(--accent); }
+  .mtrack {
+    position: relative; height: 1.65rem; background: #0c1015; border: 1px solid var(--line);
+    border-radius: 0.85rem; cursor: pointer; touch-action: none;
+  }
+  .mfill {
+    position: absolute; left: 0; top: 0; bottom: 0; width: 0;
+    background: linear-gradient(90deg, #2f7fd6, #4aa8ff); border-radius: 0.85rem;
+  }
+  .manual.active .mfill { background: linear-gradient(90deg, #2a9d5a, #46c97a); }
+  .mthumb {
+    position: absolute; top: 50%; left: 0; width: 1.95rem; height: 1.95rem; border-radius: 50%;
+    background: #fff; box-shadow: 0 2px 7px rgba(0,0,0,.55); transform: translate(-50%, -50%);
+  }
+  .mrange { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--muted); }
 
   /* Shown until the first websocket frame arrives, so a cold boot (or EVCC not yet up) never
      displays a screen full of misleading zeros. */
@@ -204,6 +238,13 @@
     <button class="mode-btn" data-mode="now">Fast<span class="hint">Battery + Grid + Solar</span></button>
   </section>
 
+  <section class="manual" id="manual">
+    <div class="manual-head"><span class="mname" id="m-name">Manual</span><span class="mhint" id="m-hint">drag to set charge current</span></div>
+    <div class="manual-val"><span class="ma" id="m-amps">–</span><span class="ua">A</span><span class="mkw" id="m-kw">≈ – kW</span></div>
+    <div class="mtrack" id="m-track"><div class="mfill" id="m-fill"></div><div class="mthumb" id="m-thumb"></div></div>
+    <div class="mrange"><span id="m-min">– A</span><span id="m-max">– A</span></div>
+  </section>
+
 <script>
 (function () {
   "use strict";
@@ -218,6 +259,9 @@
   // Loadpoint we control. EVCC loadpoint ids start at 1; index 0 -> id 1.
   var LP = 0;
   var LP_ID = LP + 1;
+
+  // Mains voltage used to convert Amps <-> kW for the manual control's live readout.
+  var VOLTS = 230;
 
   // -- helpers -------------------------------------------------------------
   function num(x) { return typeof x === "number" ? x : (x ? parseFloat(x) || 0 : 0); }
@@ -240,6 +284,20 @@
   var st = {};
   function get(k) { return st[k]; }
   function lpv(name) { return st["loadpoints." + LP + "." + name]; }
+
+  // -- manual mode state ---------------------------------------------------
+  // "Manual" is not a native EVCC mode. We implement it as: set the loadpoint maxCurrent to the
+  // chosen value and put the loadpoint in "now" mode (which charges at maxCurrent). A local flag
+  // (persisted) distinguishes our manual override from a plain Fast press, since both report mode
+  // "now". Leaving manual restores the full maxCurrent so the other modes get the full range back.
+  var manualEngaged = localStorage.getItem("kioskManual") === "1";
+  var desiredA = parseFloat(localStorage.getItem("kioskManualA")) || 0;
+  var fullMin = 6;   // slider min  (from loadpoint minCurrent when available)
+  var fullMax = 16;  // slider max  (from loadpoint maxCurrent when available)
+  var dragging = false;
+
+  function clampA(a) { return Math.max(fullMin, Math.min(fullMax, Math.round(a))); }
+  function phasesNow() { return num(lpv("phasesActive")) || num(lpv("phasesConfigured")) || 1; }
 
   // -- renderers (update text nodes only; structure never re-rendered) -----
   function renderPower() {
@@ -345,15 +403,76 @@
 
   function renderModes() {
     var mode = lpv("mode");
+    var manual = manualEngaged && mode === "now";
     var btns = document.querySelectorAll(".mode-btn");
     for (var i = 0; i < btns.length; i++) {
-      btns[i].classList.toggle("active", btns[i].getAttribute("data-mode") === mode);
+      // While manual is engaged no plain mode is highlighted (manual reuses "now").
+      var on = !manual && btns[i].getAttribute("data-mode") === mode;
+      btns[i].classList.toggle("active", on);
       btns[i].classList.remove("pending");
     }
   }
 
+  function renderManual() {
+    var mode = lpv("mode");
+
+    // If something external moved the loadpoint out of "now", our manual override no longer holds.
+    if (manualEngaged && mode && mode !== "now") {
+      manualEngaged = false; localStorage.setItem("kioskManual", "0");
+    }
+    var manual = manualEngaged && mode === "now";
+
+    // Slider range from the loadpoint's configured limits, when reported.
+    var minC = num(lpv("minCurrent")); if (minC > 0) fullMin = minC;
+    var maxRep = num(lpv("maxCurrent"));
+    if (!manual && maxRep > 0) {
+      // Not in manual: the reported maxCurrent is the real configured ceiling - remember it.
+      fullMax = maxRep; localStorage.setItem("kioskFullMax", String(fullMax));
+    } else {
+      var fm = parseFloat(localStorage.getItem("kioskFullMax"));
+      if (fm > 0) fullMax = fm;
+    }
+    if (fullMax < fullMin) fullMax = fullMin;
+
+    var charging = !!lpv("charging");
+    var phases = phasesNow();
+    var card = document.getElementById("manual");
+    var amps, kw, hint;
+
+    if (manual) {
+      if (!desiredA) desiredA = num(lpv("offeredCurrent")) || Math.round((fullMin + fullMax) / 2);
+      desiredA = clampA(desiredA);
+      amps = desiredA;
+      kw = amps * phases * VOLTS / 1000;       // live estimate from the chosen current
+      hint = "drag to set charge current";
+      card.classList.add("active");
+      text("m-name", "Manual");
+    } else {
+      var offered = num(lpv("offeredCurrent"));
+      var actual = charging ? (offered || (num(lpv("chargePower")) / (phases * VOLTS))) : 0;
+      amps = Math.round(actual);
+      kw = num(lpv("chargePower")) / 1000;      // real measured power
+      var mn = { off: "Off", pv: "Solar", minpv: "Slow", now: "Fast" }[mode] || "";
+      hint = charging ? "following " + mn + " · grab to take over"
+        : (mode === "off" ? "idle · grab to take over" : "waiting · grab to take over");
+      card.classList.remove("active");
+      text("m-name", "Charge current");
+    }
+
+    text("m-hint", hint);
+    text("m-amps", String(amps));
+    text("m-kw", "≈ " + kw.toFixed(1) + " kW");
+    text("m-min", fullMin + " A");
+    text("m-max", fullMax + " A");
+
+    var pct = fullMax > fullMin ? (amps - fullMin) / (fullMax - fullMin) * 100 : 0;
+    pct = Math.max(0, Math.min(100, pct));
+    document.getElementById("m-fill").style.width = pct + "%";
+    document.getElementById("m-thumb").style.left = pct + "%";
+  }
+
   function renderAll() {
-    renderPower(); renderBattery(); renderVehicle(); renderStats(); renderModes();
+    renderPower(); renderBattery(); renderVehicle(); renderStats(); renderModes(); renderManual();
     text("site-title", get("siteTitle") || "EVCC");
   }
 
@@ -376,7 +495,9 @@
     for (var k in obj) if (obj.hasOwnProperty(k)) st[k] = obj[k];
     if (!hasData) { hasData = true; showOverlay(false); } // first real data: reveal the UI
     showBanner(false);
-    renderAll();
+    // Don't fight the user's finger: skip re-rendering the slider position mid-drag.
+    if (dragging) { renderPower(); renderBattery(); renderVehicle(); renderStats(); }
+    else renderAll();
   }
   function onDisconnected() {
     // Before any data has loaded (cold boot / EVCC not up yet) keep the full "connecting" overlay;
@@ -427,6 +548,9 @@
     for (var i = 0; i < btns.length; i++) {
       btns[i].addEventListener("click", function () {
         var mode = this.getAttribute("data-mode");
+        var wasManual = manualEngaged;
+        // leaving manual: drop the override flag
+        manualEngaged = false; localStorage.setItem("kioskManual", "0");
         // optimistic: update state now so the highlight AND the charge-status hint both appear on
         // this touch, before the server round-trip and the next WS frame land.
         var all = document.querySelectorAll(".mode-btn");
@@ -435,16 +559,68 @@
         this.classList.add("pending");
         var btn = this;
         st["loadpoints." + LP + ".mode"] = mode;
-        renderVehicle();
-        fetch(BASE + "/api/loadpoints/" + LP_ID + "/mode/" + mode, { method: "POST", cache: "no-store" })
-          .then(function () { btn.classList.remove("pending"); renderModes(); })
+        renderVehicle(); renderManual();
+        // If we were in manual (maxCurrent lowered), restore the full ceiling first so the other
+        // modes regain their full range; then switch mode.
+        var pre = wasManual && fullMax > 0
+          ? fetch(BASE + "/api/loadpoints/" + LP_ID + "/maxcurrent/" + fullMax, { method: "POST", cache: "no-store" })
+          : Promise.resolve();
+        pre.then(function () {
+          return fetch(BASE + "/api/loadpoints/" + LP_ID + "/mode/" + mode, { method: "POST", cache: "no-store" });
+        }).then(function () { btn.classList.remove("pending"); renderModes(); })
           .catch(function () { btn.classList.remove("pending"); });
       }, { passive: true });
     }
   }
 
+  // -- manual slider -------------------------------------------------------
+  function initManual() {
+    var track = document.getElementById("m-track");
+
+    function valueFromEvent(e) {
+      var r = track.getBoundingClientRect();
+      var cx = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
+      var f = (cx - r.left) / r.width;
+      f = Math.max(0, Math.min(1, f));
+      return Math.round(fullMin + f * (fullMax - fullMin));
+    }
+    function previewTo(a) {
+      desiredA = clampA(a);
+      localStorage.setItem("kioskManualA", String(desiredA));
+      if (!manualEngaged) { manualEngaged = true; localStorage.setItem("kioskManual", "1"); }
+      // optimistic local state: jump to "now"/manual immediately so the dial reacts under the finger
+      st["loadpoints." + LP + ".mode"] = "now";
+      renderManual(); renderModes(); renderVehicle();
+    }
+    function commit() {
+      // Apply on release (not on every move) to avoid hammering EVCC: cap the current, then set now.
+      fetch(BASE + "/api/loadpoints/" + LP_ID + "/maxcurrent/" + desiredA, { method: "POST", cache: "no-store" })
+        .then(function () { return fetch(BASE + "/api/loadpoints/" + LP_ID + "/mode/now", { method: "POST", cache: "no-store" }); })
+        .catch(function () {});
+    }
+
+    function down(e) { dragging = true; if (e.cancelable) e.preventDefault(); previewTo(valueFromEvent(e)); }
+    function move(e) { if (dragging) { if (e.cancelable) e.preventDefault(); previewTo(valueFromEvent(e)); } }
+    function up() { if (dragging) { dragging = false; commit(); } }
+
+    if (window.PointerEvent) {
+      track.addEventListener("pointerdown", down);
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+      window.addEventListener("pointercancel", up);
+    } else {
+      track.addEventListener("touchstart", down, { passive: false });
+      window.addEventListener("touchmove", move, { passive: false });
+      window.addEventListener("touchend", up);
+      track.addEventListener("mousedown", down);
+      window.addEventListener("mousemove", move);
+      window.addEventListener("mouseup", up);
+    }
+  }
+
   // -- boot ----------------------------------------------------------------
   initButtons();
+  initManual();
   updateClock();
   setInterval(updateClock, 10000);
   connect();
