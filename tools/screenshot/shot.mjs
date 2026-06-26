@@ -40,7 +40,13 @@ const sample = {
   'loadpoints.0.effectiveLimitSoc': 80,
   'loadpoints.0.vehicleRange': 300,
   'loadpoints.0.sessionEnergy': 4200,                // Wh
-  'loadpoints.0.pvAction': 'enable'
+  'loadpoints.0.pvAction': 'enable',
+  // Charge-current limits + live offered current drive the manual slider. In a non-manual mode
+  // (here Solar) the slider mirrors the value EVCC offers: 30 A single-phase ~= 7.0 kW.
+  'loadpoints.0.minCurrent': 6,
+  'loadpoints.0.maxCurrent': 32,
+  'loadpoints.0.offeredCurrent': 30,
+  'loadpoints.0.phasesActive': 1
 };
 
 const browser = await chromium.launch();
