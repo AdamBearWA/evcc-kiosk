@@ -2,7 +2,7 @@
 Configuration for a Raspberry Pi Zero 2 W with a Waveshare ZERO-DISP-7a display running EVCC server and a custom lightweight UI in kiosk mode
 
 <p>
-  <img src="docs/screenshot.png" alt="The custom EVCC kiosk UI in portrait, showing solar/grid/home power, a home-battery gauge, vehicle charge status, energy stats, and charge-mode buttons" width="300">
+  <img src="docs/screenshot.png" alt="The custom EVCC kiosk UI in portrait, showing solar/grid/home power, a home-battery gauge, vehicle charge status, energy stats, charge-mode buttons, and a manual charge-current slider" width="300">
   <img src="docs/screenshot-connecting.png" alt="The connecting notice shown on a cold boot until the EVCC server responds" width="300">
 </p>
 
