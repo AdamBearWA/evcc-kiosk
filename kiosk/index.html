@@ -284,20 +284,60 @@
   var st = {};
   function get(k) { return st[k]; }
   function lpv(name) { return st["loadpoints." + LP + "." + name]; }
+  function setLpv(name, v) { st["loadpoints." + LP + "." + name] = v; }
+
+  // -- charge mode ---------------------------------------------------------
+  // The kiosk's buttons map to EVCC modes off / pv (Solar) / minpv (Slow) / now (Fast). Since
+  // EVCC 0.316, pv and minpv are reported as a single "smart" mode plus an alwaysCharge flag
+  // (off = Solar, on/once = Slow). The old names are still accepted on input, so the buttons keep
+  // posting them; only the reported state needs translating back.
+  function uiMode() {
+    var m = lpv("mode");
+    if (m !== "smart") return m;
+    var ac = lpv("alwaysCharge");
+    return ac && ac !== "off" ? "minpv" : "pv";
+  }
+  // Optimistic local mode, in whichever shape this EVCC reports, so the next WS frame (which only
+  // carries changed keys) lands on consistent state.
+  function setLocalMode(m) {
+    if ((m === "pv" || m === "minpv") && lpv("alwaysCharge") !== undefined) {
+      setLpv("mode", "smart");
+      setLpv("alwaysCharge", m === "minpv" ? "on" : "off");
+    } else {
+      setLpv("mode", m);
+    }
+  }
 
   // -- manual mode state ---------------------------------------------------
-  // "Manual" is not a native EVCC mode. We implement it as: set the loadpoint maxCurrent to the
-  // chosen value and put the loadpoint in "now" mode (which charges at maxCurrent). A local flag
-  // (persisted) distinguishes our manual override from a plain Fast press, since both report mode
-  // "now". Leaving manual restores the full maxCurrent so the other modes get the full range back.
-  var manualEngaged = localStorage.getItem("kioskManual") === "1";
-  var desiredA = parseFloat(localStorage.getItem("kioskManualA")) || 0;
+  // "Manual" is not a native EVCC mode. We implement it as: lower the loadpoint maxCurrent to the
+  // chosen value and put the loadpoint in "now" mode (which charges at maxCurrent). Manual is
+  // inferred from EVCC itself - "now" with maxCurrent below the full ceiling - so every screen (the
+  // panel and any remote browser) agrees. Leaving manual, from here or from EVCC's own UI, restores
+  // the full maxCurrent so the other modes get the full range back.
   var fullMin = 6;   // slider min  (from loadpoint minCurrent when available)
-  var fullMax = 16;  // slider max  (from loadpoint maxCurrent when available)
+  // Full maxCurrent ceiling, learned from what EVCC reports outside "now". Until it has been seen
+  // (ceilingKnown) nothing is treated as manual or restored, so we never raise maxCurrent to a guess.
+  var fullMax = parseFloat(localStorage.getItem("kioskFullMax")) || 0;
+  var ceilingKnown = fullMax > 0;
+  if (!ceilingKnown) fullMax = 16; // slider range until known
   var dragging = false;
 
   function clampA(a) { return Math.max(fullMin, Math.min(fullMax, Math.round(a))); }
   function phasesNow() { return num(lpv("phasesActive")) || num(lpv("phasesConfigured")) || 1; }
+  function isManual() {
+    if (lpv("mode") !== "now") return false;
+    var mc = num(lpv("maxCurrent"));
+    return dragging || (ceilingKnown && mc > 0 && mc < fullMax);
+  }
+  function post(path) {
+    return fetch(BASE + "/api/loadpoints/" + LP_ID + "/" + path, { method: "POST", cache: "no-store" });
+  }
+  // Put maxCurrent back to the full ceiling. Updates local state first so nothing in between
+  // mistakes the lowered manual value for the real ceiling.
+  function restoreFullMax() {
+    setLpv("maxCurrent", fullMax);
+    return post("maxcurrent/" + fullMax);
+  }
 
   // -- renderers (update text nodes only; structure never re-rendered) -----
   function renderPower() {
@@ -337,7 +377,7 @@
 
     var connected = !!lpv("connected");
     var charging = !!lpv("charging");
-    var mode = lpv("mode");
+    var mode = uiMode();
     var soc = num(lpv("vehicleSoc"));
 
     // "armed" = plugged in and set to a charging mode, but not yet drawing power.
@@ -402,8 +442,8 @@
   }
 
   function renderModes() {
-    var mode = lpv("mode");
-    var manual = manualEngaged && mode === "now";
+    var mode = uiMode();
+    var manual = isManual();
     var btns = document.querySelectorAll(".mode-btn");
     for (var i = 0; i < btns.length; i++) {
       // While manual is engaged no plain mode is highlighted (manual reuses "now").
@@ -414,35 +454,27 @@
   }
 
   function renderManual() {
-    var mode = lpv("mode");
-
-    // If something external moved the loadpoint out of "now", our manual override no longer holds.
-    if (manualEngaged && mode && mode !== "now") {
-      manualEngaged = false; localStorage.setItem("kioskManual", "0");
-    }
-    var manual = manualEngaged && mode === "now";
+    var mode = uiMode();
 
     // Slider range from the loadpoint's configured limits, when reported.
     var minC = num(lpv("minCurrent")); if (minC > 0) fullMin = minC;
     var maxRep = num(lpv("maxCurrent"));
-    if (!manual && maxRep > 0) {
-      // Not in manual: the reported maxCurrent is the real configured ceiling - remember it.
-      fullMax = maxRep; localStorage.setItem("kioskFullMax", String(fullMax));
-    } else {
-      var fm = parseFloat(localStorage.getItem("kioskFullMax"));
-      if (fm > 0) fullMax = fm;
+    // Outside "now" (and above our ceiling in "now", i.e. a Fast at a higher limit) the reported
+    // maxCurrent is the real configured ceiling - remember it.
+    if (maxRep > 0 && (mode !== "now" ? (maxRep !== fullMax || !ceilingKnown) : maxRep > fullMax)) {
+      fullMax = maxRep;
+      if (mode !== "now" || ceilingKnown) { ceilingKnown = true; localStorage.setItem("kioskFullMax", String(fullMax)); }
     }
     if (fullMax < fullMin) fullMax = fullMin;
 
+    var manual = isManual();
     var charging = !!lpv("charging");
     var phases = phasesNow();
     var card = document.getElementById("manual");
     var amps, kw, hint;
 
     if (manual) {
-      if (!desiredA) desiredA = num(lpv("offeredCurrent")) || Math.round((fullMin + fullMax) / 2);
-      desiredA = clampA(desiredA);
-      amps = desiredA;
+      amps = clampA(maxRep);
       kw = amps * phases * VOLTS / 1000;       // live estimate from the chosen current
       hint = "drag to set charge current";
       card.classList.add("active");
@@ -492,7 +524,14 @@
   function showOverlay(on) { document.getElementById("boot").hidden = !on; }
   function showBanner(on) { document.getElementById("reconnect").hidden = !on; }
   function applyMsg(obj) {
+    var wasManual = isManual();
     for (var k in obj) if (obj.hasOwnProperty(k)) st[k] = obj[k];
+    // Manual was left from elsewhere (e.g. EVCC's own UI) without the ceiling being put back:
+    // restore it, or the other modes stay capped at the manual current.
+    var mode = lpv("mode"), maxRep = num(lpv("maxCurrent"));
+    if (wasManual && !dragging && mode && mode !== "now" && maxRep > 0 && maxRep < fullMax) {
+      restoreFullMax().catch(function () {});
+    }
     if (!hasData) { hasData = true; showOverlay(false); } // first real data: reveal the UI
     showBanner(false);
     // Don't fight the user's finger: skip re-rendering the slider position mid-drag.
@@ -548,9 +587,11 @@
     for (var i = 0; i < btns.length; i++) {
       btns[i].addEventListener("click", function () {
         var mode = this.getAttribute("data-mode");
-        var wasManual = manualEngaged;
-        // leaving manual: drop the override flag
-        manualEngaged = false; localStorage.setItem("kioskManual", "0");
+        // If maxCurrent is lowered below the ceiling (manual), restore it first so the other modes
+        // regain their full range; then switch mode. Done before the optimistic mode change below,
+        // which would otherwise make the lowered value look like the real ceiling.
+        var maxRep = num(lpv("maxCurrent"));
+        var pre = ceilingKnown && maxRep > 0 && maxRep < fullMax ? restoreFullMax() : Promise.resolve();
         // optimistic: update state now so the highlight AND the charge-status hint both appear on
         // this touch, before the server round-trip and the next WS frame land.
         var all = document.querySelectorAll(".mode-btn");
@@ -558,15 +599,10 @@
         this.classList.add("active");
         this.classList.add("pending");
         var btn = this;
-        st["loadpoints." + LP + ".mode"] = mode;
+        setLocalMode(mode);
         renderVehicle(); renderManual();
-        // If we were in manual (maxCurrent lowered), restore the full ceiling first so the other
-        // modes regain their full range; then switch mode.
-        var pre = wasManual && fullMax > 0
-          ? fetch(BASE + "/api/loadpoints/" + LP_ID + "/maxcurrent/" + fullMax, { method: "POST", cache: "no-store" })
-          : Promise.resolve();
         pre.then(function () {
-          return fetch(BASE + "/api/loadpoints/" + LP_ID + "/mode/" + mode, { method: "POST", cache: "no-store" });
+          return post("mode/" + mode);
         }).then(function () { btn.classList.remove("pending"); renderModes(); })
           .catch(function () { btn.classList.remove("pending"); });
       }, { passive: true });
@@ -584,18 +620,20 @@
       f = Math.max(0, Math.min(1, f));
       return Math.round(fullMin + f * (fullMax - fullMin));
     }
+    var desiredA = 0;
     function previewTo(a) {
       desiredA = clampA(a);
-      localStorage.setItem("kioskManualA", String(desiredA));
-      if (!manualEngaged) { manualEngaged = true; localStorage.setItem("kioskManual", "1"); }
       // optimistic local state: jump to "now"/manual immediately so the dial reacts under the finger
-      st["loadpoints." + LP + ".mode"] = "now";
+      setLocalMode("now");
+      setLpv("maxCurrent", desiredA);
       renderManual(); renderModes(); renderVehicle();
     }
     function commit() {
-      // Apply on release (not on every move) to avoid hammering EVCC: cap the current, then set now.
-      fetch(BASE + "/api/loadpoints/" + LP_ID + "/maxcurrent/" + desiredA, { method: "POST", cache: "no-store" })
-        .then(function () { return fetch(BASE + "/api/loadpoints/" + LP_ID + "/mode/now", { method: "POST", cache: "no-store" }); })
+      // Apply on release (not on every move) to avoid hammering EVCC: set now, then cap the current.
+      // In that order, other screens never see a lowered maxCurrent outside "now" and mistake it
+      // for the real ceiling.
+      post("mode/now")
+        .then(function () { return post("maxcurrent/" + desiredA); })
         .catch(function () {});
     }
 
