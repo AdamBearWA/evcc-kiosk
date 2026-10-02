@@ -282,9 +282,25 @@
   // Flat key store. Site values arrive as nested objects/scalars; loadpoint
   // values arrive as dotted keys ("loadpoints.0.chargePower").
   var st = {};
+  // Optimistic values for keys we've just changed, read in preference to st until our requests
+  // settle - EVCC re-sends some keys (e.g. mode) every cycle, which would otherwise briefly undo them.
+  var opt = {}, optGen = 0;
   function get(k) { return st[k]; }
-  function lpv(name) { return st["loadpoints." + LP + "." + name]; }
-  function setLpv(name, v) { st["loadpoints." + LP + "." + name] = v; }
+  function lpk(name) { return "loadpoints." + LP + "." + name; }
+  function lpv(name) { var k = lpk(name); return opt.hasOwnProperty(k) ? opt[k] : st[k]; }
+  function setOpt(name, v) { opt[lpk(name)] = v; }
+  function post(path) {
+    return fetch(BASE + "/api/loadpoints/" + LP_ID + "/" + path, { method: "POST", cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error(path + ": " + r.status); return r; });
+  }
+  // Drop the optimistic values once the requests settle: at once on failure, or after a moment on
+  // success so EVCC's resulting websocket frame has landed.
+  function settle(p) {
+    var g = ++optGen;
+    p.then(function () { return 1500; }, function () { return 0; }).then(function (delay) {
+      setTimeout(function () { if (g === optGen) { opt = {}; if (!dragging) renderAll(); } }, delay);
+    });
+  }
 
   // -- charge mode ---------------------------------------------------------
   // The kiosk's buttons map to EVCC modes off / pv (Solar) / minpv (Slow) / now (Fast). Since
@@ -297,46 +313,57 @@
     var ac = lpv("alwaysCharge");
     return ac && ac !== "off" ? "minpv" : "pv";
   }
-  // Optimistic local mode, in whichever shape this EVCC reports, so the next WS frame (which only
-  // carries changed keys) lands on consistent state.
+  // Optimistic local mode, in whichever shape this EVCC reports.
   function setLocalMode(m) {
-    if ((m === "pv" || m === "minpv") && lpv("alwaysCharge") !== undefined) {
-      setLpv("mode", "smart");
-      setLpv("alwaysCharge", m === "minpv" ? "on" : "off");
+    if ((m === "pv" || m === "minpv") && st[lpk("alwaysCharge")] !== undefined) {
+      setOpt("mode", "smart");
+      setOpt("alwaysCharge", m === "minpv" ? "on" : "off");
     } else {
-      setLpv("mode", m);
+      setOpt("mode", m);
     }
   }
 
   // -- manual mode state ---------------------------------------------------
   // "Manual" is not a native EVCC mode. We implement it as: lower the loadpoint maxCurrent to the
-  // chosen value and put the loadpoint in "now" mode (which charges at maxCurrent). Manual is
-  // inferred from EVCC itself - "now" with maxCurrent below the full ceiling - so every screen (the
-  // panel and any remote browser) agrees. Leaving manual, from here or from EVCC's own UI, restores
-  // the full maxCurrent so the other modes get the full range back.
+  // chosen value and put the loadpoint in "now" mode (which charges at maxCurrent).
+  // The full ceiling to restore afterwards is stored in EVCC itself, in the fraction of maxCurrent:
+  // manual 10 A with a 32 A ceiling is written as 10.032. Chargers effectively still get 10 A, and
+  // because it lives in EVCC every screen (the panel and any remote browser, even one just loaded)
+  // knows both that manual is on and what to restore - while a whole-number maxCurrent set in
+  // EVCC's own UI is never mistaken for manual or "restored" over.
   var fullMin = 6;   // slider min  (from loadpoint minCurrent when available)
-  // Full maxCurrent ceiling, learned from what EVCC reports outside "now". Until it has been seen
-  // (ceilingKnown) nothing is treated as manual or restored, so we never raise maxCurrent to a guess.
-  var fullMax = parseFloat(localStorage.getItem("kioskFullMax")) || 0;
-  var ceilingKnown = fullMax > 0;
-  if (!ceilingKnown) fullMax = 16; // slider range until known
+  var fullMax = 16;  // slider max  (the ceiling, from loadpoint maxCurrent when available)
   var dragging = false;
+  var RESTORE_DELAY = 5000; // grace for our own maxcurrent -> mode/now commit to land
 
-  function clampA(a) { return Math.max(fullMin, Math.min(fullMax, Math.round(a))); }
   function phasesNow() { return num(lpv("phasesActive")) || num(lpv("phasesConfigured")) || 1; }
-  function isManual() {
-    if (lpv("mode") !== "now") return false;
-    var mc = num(lpv("maxCurrent"));
-    return dragging || (ceilingKnown && mc > 0 && mc < fullMax);
+  // {amps, ceiling} when maxCurrent carries our manual marker, else null.
+  function manualMarker() {
+    var mc = num(lpv("maxCurrent")), a = Math.floor(mc), c = Math.round((mc - a) * 1000);
+    return c > a && c <= 100 ? { amps: a, ceiling: c } : null;
   }
-  function post(path) {
-    return fetch(BASE + "/api/loadpoints/" + LP_ID + "/" + path, { method: "POST", cache: "no-store" });
+  function isManual() { return dragging || (lpv("mode") === "now" && !!manualMarker()); }
+  // The full ceiling: from the marker in manual, otherwise maxCurrent itself.
+  function ceiling() {
+    var m = manualMarker();
+    return Math.max(fullMin, m ? m.ceiling : Math.floor(num(lpv("maxCurrent"))) || 16);
   }
-  // Put maxCurrent back to the full ceiling. Updates local state first so nothing in between
-  // mistakes the lowered manual value for the real ceiling.
-  function restoreFullMax() {
-    setLpv("maxCurrent", fullMax);
-    return post("maxcurrent/" + fullMax);
+  // maxCurrent value for a manual current under the given ceiling (plain ceiling = full current).
+  function encodeManual(a, c) { return a >= c ? String(c) : (a + c / 1000).toFixed(3); }
+
+  // Manual left without the ceiling being restored (from EVCC's UI, a default mode on unplug, a
+  // failed request...): put it back. Debounced and re-checked, so a commit in flight on any screen
+  // (maxcurrent lands just before mode/now) isn't mistaken for it.
+  var restoreTimer = null;
+  function checkStuckManual() {
+    if (restoreTimer || dragging) return;
+    if (lpv("mode") === "now" || !manualMarker()) return;
+    restoreTimer = setTimeout(function () {
+      restoreTimer = null;
+      var m = manualMarker();
+      if (dragging || !m || lpv("mode") === "now" || !lpv("mode")) return;
+      post("maxcurrent/" + m.ceiling).catch(function () {});
+    }, RESTORE_DELAY);
   }
 
   // -- renderers (update text nodes only; structure never re-rendered) -----
@@ -456,25 +483,19 @@
   function renderManual() {
     var mode = uiMode();
 
-    // Slider range from the loadpoint's configured limits, when reported.
+    // Slider range from the loadpoint's limits, when reported.
     var minC = num(lpv("minCurrent")); if (minC > 0) fullMin = minC;
-    var maxRep = num(lpv("maxCurrent"));
-    // Outside "now" (and above our ceiling in "now", i.e. a Fast at a higher limit) the reported
-    // maxCurrent is the real configured ceiling - remember it.
-    if (maxRep > 0 && (mode !== "now" ? (maxRep !== fullMax || !ceilingKnown) : maxRep > fullMax)) {
-      fullMax = maxRep;
-      if (mode !== "now" || ceilingKnown) { ceilingKnown = true; localStorage.setItem("kioskFullMax", String(fullMax)); }
-    }
-    if (fullMax < fullMin) fullMax = fullMin;
+    fullMax = ceiling();
 
     var manual = isManual();
+    var marker = manualMarker();
     var charging = !!lpv("charging");
     var phases = phasesNow();
     var card = document.getElementById("manual");
     var amps, kw, hint;
 
     if (manual) {
-      amps = clampA(maxRep);
+      amps = marker ? marker.amps : fullMax;
       kw = amps * phases * VOLTS / 1000;       // live estimate from the chosen current
       hint = "drag to set charge current";
       card.classList.add("active");
@@ -524,14 +545,8 @@
   function showOverlay(on) { document.getElementById("boot").hidden = !on; }
   function showBanner(on) { document.getElementById("reconnect").hidden = !on; }
   function applyMsg(obj) {
-    var wasManual = isManual();
     for (var k in obj) if (obj.hasOwnProperty(k)) st[k] = obj[k];
-    // Manual was left from elsewhere (e.g. EVCC's own UI) without the ceiling being put back:
-    // restore it, or the other modes stay capped at the manual current.
-    var mode = lpv("mode"), maxRep = num(lpv("maxCurrent"));
-    if (wasManual && !dragging && mode && mode !== "now" && maxRep > 0 && maxRep < fullMax) {
-      restoreFullMax().catch(function () {});
-    }
+    checkStuckManual();
     if (!hasData) { hasData = true; showOverlay(false); } // first real data: reveal the UI
     showBanner(false);
     // Don't fight the user's finger: skip re-rendering the slider position mid-drag.
@@ -587,11 +602,11 @@
     for (var i = 0; i < btns.length; i++) {
       btns[i].addEventListener("click", function () {
         var mode = this.getAttribute("data-mode");
-        // If maxCurrent is lowered below the ceiling (manual), restore it first so the other modes
-        // regain their full range; then switch mode. Done before the optimistic mode change below,
-        // which would otherwise make the lowered value look like the real ceiling.
-        var maxRep = num(lpv("maxCurrent"));
-        var pre = ceilingKnown && maxRep > 0 && maxRep < fullMax ? restoreFullMax() : Promise.resolve();
+        // Leaving manual: restore the full ceiling first so the other modes regain their full
+        // range; then switch mode.
+        var marker = manualMarker();
+        var pre = marker ? post("maxcurrent/" + marker.ceiling) : Promise.resolve();
+        if (marker) setOpt("maxCurrent", marker.ceiling);
         // optimistic: update state now so the highlight AND the charge-status hint both appear on
         // this touch, before the server round-trip and the next WS frame land.
         var all = document.querySelectorAll(".mode-btn");
@@ -601,9 +616,9 @@
         var btn = this;
         setLocalMode(mode);
         renderVehicle(); renderManual();
-        pre.then(function () {
-          return post("mode/" + mode);
-        }).then(function () { btn.classList.remove("pending"); renderModes(); })
+        var req = pre.then(function () { return post("mode/" + mode); });
+        settle(req);
+        req.then(function () { btn.classList.remove("pending"); renderModes(); })
           .catch(function () { btn.classList.remove("pending"); });
       }, { passive: true });
     }
@@ -620,24 +635,27 @@
       f = Math.max(0, Math.min(1, f));
       return Math.round(fullMin + f * (fullMax - fullMin));
     }
-    var desiredA = 0;
+    var dragCeil = 0, value = "";
     function previewTo(a) {
-      desiredA = clampA(a);
+      a = Math.max(fullMin, Math.min(dragCeil, a));
+      value = encodeManual(a, dragCeil);
       // optimistic local state: jump to "now"/manual immediately so the dial reacts under the finger
       setLocalMode("now");
-      setLpv("maxCurrent", desiredA);
+      setOpt("maxCurrent", parseFloat(value));
       renderManual(); renderModes(); renderVehicle();
     }
     function commit() {
-      // Apply on release (not on every move) to avoid hammering EVCC: set now, then cap the current.
-      // In that order, other screens never see a lowered maxCurrent outside "now" and mistake it
-      // for the real ceiling.
-      post("mode/now")
-        .then(function () { return post("maxcurrent/" + desiredA); })
-        .catch(function () {});
+      // Apply on release (not on every move) to avoid hammering EVCC: cap the current, then set
+      // now - in that order so the charger never sees "now" at the full current, even briefly.
+      settle(post("maxcurrent/" + value).then(function () { return post("mode/now"); }));
     }
 
-    function down(e) { dragging = true; if (e.cancelable) e.preventDefault(); previewTo(valueFromEvent(e)); }
+    function down(e) {
+      if (e.cancelable) e.preventDefault();
+      dragCeil = ceiling(); // fixed for the whole drag
+      dragging = true;
+      previewTo(valueFromEvent(e));
+    }
     function move(e) { if (dragging) { if (e.cancelable) e.preventDefault(); previewTo(valueFromEvent(e)); } }
     function up() { if (dragging) { dragging = false; commit(); } }
 
@@ -657,6 +675,8 @@
   }
 
   // -- boot ----------------------------------------------------------------
+  // Manual state now lives in EVCC (see manualMarker); drop the keys older versions stored.
+  try { ["kioskManual", "kioskManualA", "kioskFullMax"].forEach(function (k) { localStorage.removeItem(k); }); } catch (e) {}
   initButtons();
   initManual();
   updateClock();
