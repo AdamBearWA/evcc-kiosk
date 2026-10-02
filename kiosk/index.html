@@ -289,16 +289,33 @@
   function lpk(name) { return "loadpoints." + LP + "." + name; }
   function lpv(name) { var k = lpk(name); return opt.hasOwnProperty(k) ? opt[k] : st[k]; }
   function setOpt(name, v) { opt[lpk(name)] = v; }
-  function post(path) {
-    return fetch(BASE + "/api/loadpoints/" + LP_ID + "/" + path, { method: "POST", cache: "no-store" })
-      .then(function (r) { if (!r.ok) throw new Error(path + ": " + r.status); return r; });
+  // POST each path in turn, stopping at the first failure. All writes go through one queue, an
+  // action's paths together, so quick successive actions (release the slider, then tap a mode)
+  // reach EVCC whole and in the order they were made.
+  var postQueue = Promise.resolve();
+  function post() {
+    var paths = Array.prototype.slice.call(arguments);
+    function send() {
+      return paths.reduce(function (chain, path) {
+        return chain.then(function () {
+          return fetch(BASE + "/api/loadpoints/" + LP_ID + "/" + path, { method: "POST", cache: "no-store" })
+            .then(function (r) { if (!r.ok) throw new Error(path + ": " + r.status); });
+        });
+      }, Promise.resolve());
+    }
+    var p = postQueue.then(send, send);
+    postQueue = p.catch(function () {});
+    return p;
   }
   // Drop the optimistic values once the requests settle: at once on failure, or after a moment on
-  // success so EVCC's resulting websocket frame has landed.
+  // success so EVCC's resulting websocket frame has landed - and after 10 s regardless, so a request
+  // that never completes can't freeze the screen on stale values.
+  function clearOpt(g) { if (g === optGen && !dragging) { opt = {}; renderAll(); } }
   function settle(p) {
     var g = ++optGen;
+    setTimeout(function () { clearOpt(g); }, 10000);
     p.then(function () { return 1500; }, function () { return 0; }).then(function (delay) {
-      setTimeout(function () { if (g === optGen) { opt = {}; if (!dragging) renderAll(); } }, delay);
+      setTimeout(function () { clearOpt(g); }, delay);
     });
   }
 
@@ -330,7 +347,8 @@
   // manual 10 A with a 32 A ceiling is written as 10.032. Chargers effectively still get 10 A, and
   // because it lives in EVCC every screen (the panel and any remote browser, even one just loaded)
   // knows both that manual is on and what to restore - while a whole-number maxCurrent set in
-  // EVCC's own UI is never mistaken for manual or "restored" over.
+  // EVCC's own UI is never mistaken for manual or "restored" over. Ceilings are whole amps: a
+  // fractional limit set in EVCC is rounded down when restored.
   var fullMin = 6;   // slider min  (from loadpoint minCurrent when available)
   var fullMax = 16;  // slider max  (the ceiling, from loadpoint maxCurrent when available)
   var dragging = false;
@@ -572,6 +590,11 @@
   function showBanner(on) { document.getElementById("reconnect").hidden = !on; }
   function applyMsg(obj) {
     for (var k in obj) if (obj.hasOwnProperty(k)) st[k] = obj[k];
+    if (legacyCeiling && lpv("mode") !== undefined && lpv("maxCurrent") !== undefined) {
+      var mc = num(lpv("maxCurrent"));
+      if (lpv("mode") === "now" && mc === Math.floor(mc) && mc < legacyCeiling) post("maxcurrent/" + encodeManual(mc, legacyCeiling)).catch(function () {});
+      legacyCeiling = 0;
+    }
     checkStuckManual();
     if (!hasData) { hasData = true; showOverlay(false); } // first real data: reveal the UI
     showBanner(false);
@@ -628,10 +651,10 @@
     for (var i = 0; i < btns.length; i++) {
       btns[i].addEventListener("click", function () {
         var mode = this.getAttribute("data-mode");
-        // Leaving manual: restore the full ceiling first so the other modes regain their full
-        // range; then switch mode.
+        // Leaving manual: switch mode, then restore the full ceiling so the other modes regain their
+        // full range. In that order the charger is never left in "now" at full current; if the
+        // restore fails, the marker left outside "now" is repaired by checkStuckManual.
         var marker = manualMarker();
-        var pre = marker ? post("maxcurrent/" + marker.ceiling) : Promise.resolve();
         if (marker) setOpt("maxCurrent", marker.ceiling);
         // optimistic: update state now so the highlight AND the charge-status hint both appear on
         // this touch, before the server round-trip and the next WS frame land.
@@ -642,7 +665,7 @@
         var btn = this;
         setLocalMode(mode);
         renderVehicle(); renderManual();
-        var req = pre.then(function () { return post("mode/" + mode); });
+        var req = marker ? post("mode/" + mode, "maxcurrent/" + marker.ceiling) : post("mode/" + mode);
         settle(req);
         req.then(function () { btn.classList.remove("pending"); renderModes(); })
           .catch(function () { btn.classList.remove("pending"); });
@@ -673,11 +696,13 @@
     function commit() {
       // Apply on release (not on every move) to avoid hammering EVCC: cap the current, then set
       // now - in that order so the charger never sees "now" at the full current, even briefly.
-      settle(post("maxcurrent/" + value).then(function () { return post("mode/now"); }));
+      settle(post("maxcurrent/" + value, "mode/now"));
     }
 
     function down(e) {
       if (e.cancelable) e.preventDefault();
+      if (!num(lpv("maxCurrent"))) return; // no limits from EVCC yet: nothing to scale against
+      optGen++; // an earlier action's pending clear must not wipe this drag's state
       dragCeil = ceiling(); // fixed for the whole drag
       dragging = true;
       previewTo(valueFromEvent(e));
@@ -701,8 +726,14 @@
   }
 
   // -- boot ----------------------------------------------------------------
-  // Manual state now lives in EVCC (see manualMarker); drop the keys older versions stored.
-  try { ["kioskManual", "kioskManualA", "kioskFullMax"].forEach(function (k) { localStorage.removeItem(k); }); } catch (e) {}
+  // Manual state now lives in EVCC (see manualMarker); drop the keys older versions stored. If an
+  // older version left this screen in manual, convert it to a marker on the first frame so the
+  // usual restore puts the full ceiling back.
+  var legacyCeiling = 0;
+  try {
+    if (localStorage.getItem("kioskManual") === "1") legacyCeiling = Math.floor(parseFloat(localStorage.getItem("kioskFullMax")) || 0);
+    ["kioskManual", "kioskManualA", "kioskFullMax"].forEach(function (k) { localStorage.removeItem(k); });
+  } catch (e) {}
   initButtons();
   initManual();
   window.addEventListener("resize", function () { fitLayout(true); });
