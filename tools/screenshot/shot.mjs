@@ -34,7 +34,8 @@ const sample = {
   'loadpoints.0.vehicleTitle': 'Sample Vehicle',
   'loadpoints.0.connected': true,
   'loadpoints.0.charging': true,
-  'loadpoints.0.mode': 'pv',
+  'loadpoints.0.mode': 'smart',                     // EVCC 0.316+: Solar = smart + alwaysCharge off
+  'loadpoints.0.alwaysCharge': 'off',
   'loadpoints.0.chargePower': 7000,
   'loadpoints.0.vehicleSoc': 62,
   'loadpoints.0.effectiveLimitSoc': 80,

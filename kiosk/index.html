@@ -527,6 +527,32 @@
   function renderAll() {
     renderPower(); renderBattery(); renderVehicle(); renderStats(); renderModes(); renderManual();
     text("site-title", get("siteTitle") || "EVCC");
+    fitLayout(false);
+  }
+
+  // -- fit to screen -------------------------------------------------------
+  // The cards shrink to keep the buttons on screen, clipping their own content if the screen is
+  // shorter than the layout (a remote browser, or a different font). When that happens, step the
+  // base font size down until nothing is clipped. Only re-measured when what's shown changes or the
+  // window resizes, so a normal frame costs no layout work.
+  var fitKey = "";
+  function clipped() {
+    var cards = document.querySelectorAll(".card");
+    for (var i = 0; i < cards.length; i++) {
+      if (!cards[i].hidden && cards[i].scrollHeight > cards[i].clientHeight + 1) return true;
+    }
+    return false;
+  }
+  function fitLayout(force) {
+    var note = document.getElementById("charge-note");
+    var key = [window.innerWidth, window.innerHeight, document.getElementById("battery-card").hidden,
+      document.getElementById("veh-soc-wrap").hidden, note.hidden, note.textContent].join("|");
+    if (!force && key === fitKey) return;
+    fitKey = key;
+    var root = document.documentElement;
+    root.style.fontSize = "";
+    var size = parseFloat(getComputedStyle(root).fontSize);
+    while (clipped() && size > 12) { size -= 0.5; root.style.fontSize = size + "px"; }
   }
 
   // -- clock ---------------------------------------------------------------
@@ -550,7 +576,7 @@
     if (!hasData) { hasData = true; showOverlay(false); } // first real data: reveal the UI
     showBanner(false);
     // Don't fight the user's finger: skip re-rendering the slider position mid-drag.
-    if (dragging) { renderPower(); renderBattery(); renderVehicle(); renderStats(); }
+    if (dragging) { renderPower(); renderBattery(); renderVehicle(); renderStats(); fitLayout(false); }
     else renderAll();
   }
   function onDisconnected() {
@@ -679,6 +705,7 @@
   try { ["kioskManual", "kioskManualA", "kioskFullMax"].forEach(function (k) { localStorage.removeItem(k); }); } catch (e) {}
   initButtons();
   initManual();
+  window.addEventListener("resize", function () { fitLayout(true); });
   updateClock();
   setInterval(updateClock, 10000);
   connect();
